@@ -1,4 +1,4 @@
 misc
 .idea
 *.pyc
-config.yml
+src/resources/config.yml
