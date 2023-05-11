@@ -1,0 +1,4 @@
+misc
+.idea
+*.pyc
+config.yml
