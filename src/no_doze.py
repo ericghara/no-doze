@@ -7,8 +7,8 @@ import time
 from datetime import datetime, timedelta
 from typing import *
 
-from sleep_inhibitor.implementations.plex import PlexInhibitor
-from inhibiting_process import InhibitingProcess
+from src.sleep_inhibitor.inhibiting_process import InhibitingProcess
+from src.sleep_inhibitor.implementations.plex import PlexInhibitor
 
 class NoDoze:
     WHO = "No-Doze Service"

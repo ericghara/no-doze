@@ -1,4 +1,4 @@
-from inhibiting_process import InhibitingProcess
+from src.sleep_inhibitor.inhibiting_process import InhibitingProcess
 
 
 class AlwaysInhibits(InhibitingProcess):

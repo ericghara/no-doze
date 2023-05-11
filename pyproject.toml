@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "no-doze"
+version = "0.1.0"
+description = "\"Delays a Linux computer form sleeping while certain processes are occuring, such as streaming a video to a client\""
+authors = ["Your Name <you@example.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "no_doze"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+requests = "^2.30.0"
+PyYAML = "^6.0"
+PlexAPI = "^4.13.4"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

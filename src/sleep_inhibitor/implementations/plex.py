@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 from plexapi.base import PlexSession
 from plexapi.server import PlexServer
 
-from inhibiting_process import InhibitingProcess
-from no_doze.config_provider import config_yml
+from src.sleep_inhibitor.inhibiting_process import InhibitingProcess
+from src.config_provider import config_yml
 
 config_root_key = "plex"
 token_key = "token"

@@ -4,7 +4,7 @@ from datetime import timedelta
 
 import yaml
 
-from plex import PlexInhibitor
+from src.sleep_inhibitor.implementations.plex import PlexInhibitor
 from unittest.mock import patch, Mock
 
 
@@ -17,12 +17,12 @@ class PlexTest(unittest.TestCase):
                     base_url: "http://localhost:12345"
                     pause_timeout_min: 999
                 """
-        patch.dict("plex.config_yml", yaml.load(yml_str, Loader=yaml.CLoader) ).start()
+        patch.dict("src.sleep_inhibitor.implementations.plex.config_yml", yaml.load(yml_str, Loader=yaml.CLoader) ).start()
 
         # This is the plex server constructed by PlexServer() constructor
         self.templateMock = Mock()
         # This patches the PlexServer import
-        self.plexPatch = patch("plex.PlexServer", return_value=self.templateMock )
+        self.plexPatch = patch("src.sleep_inhibitor.implementations.plex.PlexServer", return_value=self.templateMock )
         self.plexServerMock = self.plexPatch.start()
 
         self.inhibitor = PlexInhibitor()
