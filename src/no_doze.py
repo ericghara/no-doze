@@ -6,6 +6,7 @@ import subprocess
 import time
 from datetime import datetime, timedelta
 from typing import *
+from config_provider import config_yml
 
 from src.sleep_inhibitor.inhibiting_process import InhibitingProcess
 from src.sleep_inhibitor.implementations.plex import PlexInhibitor
@@ -18,8 +19,11 @@ class NoDoze:
     SYS_SLEEP_PROG = "sleep"
     PERIOD_OVERLAP = 1
 
-    def __init__(self, check_period_sec: float | int):
+    def __init__(self, check_period_sec: float | int=None):
         self.log = logging.getLogger(type(self).__name__)
+        if check_period_sec is None:
+            check_period_sec = config_yml.get("check_period_sec", 0)
+
         self.check_period: timedelta = timedelta(seconds=check_period_sec)
         self.check_period_with_overlap = self.check_period + timedelta(seconds=self.PERIOD_OVERLAP)
         self.inhibiting_processes = list()
@@ -93,7 +97,7 @@ class NoDoze:
 
 def main() -> None:
     logging.basicConfig(level=logging.DEBUG)
-    no_doze = NoDoze(10)
+    no_doze = NoDoze()
     no_doze.add_inhibitor(PlexInhibitor())
     no_doze.run()
 
