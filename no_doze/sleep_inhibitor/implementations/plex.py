@@ -2,10 +2,11 @@ import logging
 from typing import List, Dict
 from datetime import datetime, timedelta
 
-from plexapi.base import PlexSession, PlexPartialObject
+from plexapi.base import PlexSession
 from plexapi.server import PlexServer
-from sleep_inhibitor.inhibiting_process import InhibitingProcess
-from src import config_yml
+
+from inhibiting_process import InhibitingProcess
+from no_doze.config_provider import config_yml
 
 config_root_key = "plex"
 token_key = "token"
@@ -31,7 +32,7 @@ class PlexInhibitor(InhibitingProcess):
         return PlexServer(baseurl=base_url, token=token)
 
     def _get_pause_timeout(self) -> timedelta:
-        raw_min = config_yml.get("pause_timeout_key", 0)
+        raw_min = config_yml.get(config_root_key).get(pause_timeout_key, 0)
         return timedelta(minutes=raw_min)
 
     def _fetch_sessions(self) -> List[PlexSession]:
@@ -42,7 +43,7 @@ class PlexInhibitor(InhibitingProcess):
             return list()
 
 
-    def _update_paused(self, currently_paused: List[PlexPartialObject]) -> bool:
+    def _update_paused(self, currently_paused: List[PlexSession]) -> bool:
         """
         Add newly paused sessions and *only* carry over those that remain paused.  Returns
         True if any paused items inhibit sleep (`time duration paused < pause_timeout`) else
@@ -64,14 +65,13 @@ class PlexInhibitor(InhibitingProcess):
         return inhibited
 
     def does_inhibit(self) -> bool:
-        currently_paused: List[PlexPartialObject] = list()
+        currently_paused: List[PlexSession] = list()
         inhibited = False
         # check all sessions for activity
         for session in self._fetch_sessions():
-            for media in session:
-                if media.player.state.lower() != "paused":
-                    inhibited = True
-                else:
-                    currently_paused.append(media)
+            if session.player.state.lower() != "paused":
+                inhibited = True
+            else:
+                currently_paused.append(session)
         inhibited |= self._update_paused(currently_paused)
         return inhibited

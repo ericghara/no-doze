@@ -1,4 +1,4 @@
 misc
 .idea
 *.pyc
-src/resources/config.yml
+no_doze/resources/config.yml

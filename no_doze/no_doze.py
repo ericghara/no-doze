@@ -1,13 +1,14 @@
 import datetime
 import logging
+import os
 import signal
 import subprocess
 import time
 from datetime import datetime, timedelta
 from typing import *
 
-from sleep_inhibitor.inhibiting_process import InhibitingProcess
-from sleep_inhibitor.implementations.test_processes import AlwaysInhibits
+from sleep_inhibitor.implementations.plex import PlexInhibitor
+from inhibiting_process import InhibitingProcess
 
 class NoDoze:
     WHO = "No-Doze Service"
@@ -93,9 +94,10 @@ class NoDoze:
 def main() -> None:
     logging.basicConfig(level=logging.DEBUG)
     no_doze = NoDoze(10)
-    no_doze.add_inhibitor(AlwaysInhibits())
+    no_doze.add_inhibitor(PlexInhibitor())
     no_doze.run()
 
 
 if __name__ == "__main__":
+    print(os.path.abspath(__file__))
     main()
