@@ -6,7 +6,9 @@ import subprocess
 import time
 from datetime import datetime, timedelta
 from typing import *
-from config_provider import config_yml
+
+from src.sleep_inhibitor.implementations.qbittorrent import QbittorrentInhibitor
+from src.config_provider import _config_yml
 
 from src.sleep_inhibitor.inhibiting_process import InhibitingProcess
 from src.sleep_inhibitor.implementations.plex import PlexInhibitor
@@ -22,7 +24,7 @@ class NoDoze:
     def __init__(self, check_period_sec: float | int=None):
         self.log = logging.getLogger(type(self).__name__)
         if check_period_sec is None:
-            check_period_sec = config_yml.get("check_period_sec", 0)
+            check_period_sec = _config_yml.get("check_period_sec", 0)
 
         self.check_period: timedelta = timedelta(seconds=check_period_sec)
         self.check_period_with_overlap = self.check_period + timedelta(seconds=self.PERIOD_OVERLAP)
@@ -80,7 +82,7 @@ class NoDoze:
     def _inhibit(self, inhibiting_processes: List[InhibitingProcess], until: datetime) -> subprocess.Popen:
         why = self._generate_why(inhibiting_processes=inhibiting_processes, until=until)
         inhibit_command = self._generate_inhibit_command(why=why, until=until)
-        self.log.debug(f"Runnning: {inhibit_command}")
+        self.log.debug(f"Running: {inhibit_command}")
         return subprocess.Popen(inhibit_command, shell=True)
 
     def _generate_why(self, inhibiting_processes: List[InhibitingProcess], until: datetime) -> str:
@@ -99,6 +101,7 @@ def main() -> None:
     logging.basicConfig(level=logging.DEBUG)
     no_doze = NoDoze()
     no_doze.add_inhibitor(PlexInhibitor())
+    no_doze.add_inhibitor(QbittorrentInhibitor())
     no_doze.run()
 
 

@@ -6,6 +6,7 @@ import yaml
 
 from src.sleep_inhibitor.implementations.plex import PlexInhibitor
 from unittest.mock import patch, Mock
+import src.config_provider as config_provider
 
 
 class PlexTest(unittest.TestCase):
@@ -17,8 +18,7 @@ class PlexTest(unittest.TestCase):
                     base_url: "http://localhost:12345"
                     pause_timeout_min: 999
                 """
-        patch.dict("src.sleep_inhibitor.implementations.plex.config_yml", yaml.load(yml_str, Loader=yaml.CLoader) ).start()
-
+        config_provider._load_string(yml_str)
         # This is the plex server constructed by PlexServer() constructor
         self.templateMock = Mock()
         # This patches the PlexServer import

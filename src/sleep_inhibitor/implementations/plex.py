@@ -6,7 +6,7 @@ from plexapi.base import PlexSession
 from plexapi.server import PlexServer
 
 from src.sleep_inhibitor.inhibiting_process import InhibitingProcess
-from src.config_provider import config_yml
+from src import config_provider
 
 config_root_key = "plex"
 token_key = "token"
@@ -24,16 +24,15 @@ class PlexInhibitor(InhibitingProcess):
         self.paused: Dict[str, datetime] = dict()
 
     def _create_server_template(self) -> PlexServer:
-        plex_config = config_yml.get(config_root_key)
-        token = plex_config.get(token_key)
-        base_url = plex_config.get(base_url_key)
+        token = config_provider.get_value([config_root_key, token_key], "")
+        base_url = config_provider.get_value([config_root_key, base_url_key], "")
         if not token or not base_url:
             raise ValueError("Problem parsing server info from config file.")
         return PlexServer(baseurl=base_url, token=token)
 
     def _get_pause_timeout(self) -> timedelta:
-        raw_min = config_yml.get(config_root_key).get(pause_timeout_key, 0)
-        return timedelta(minutes=raw_min)
+        raw_min = config_provider.get_value([config_root_key, pause_timeout_key], "0")
+        return timedelta(minutes=float(raw_min) )
 
     def _fetch_sessions(self) -> List[PlexSession]:
         try:
