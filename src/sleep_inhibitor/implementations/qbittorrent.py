@@ -62,15 +62,17 @@ class QbittorrentInhibitor(InhibitingProcess):
         return self._calc_mean_kbps_in_window(self._seed_history, self._seed_period) >= self._min_seed_speed
 
     def _calc_mean_kbps_in_window(self, history: Deque[TimeBytes], period: timedelta) -> float:
-        if len(history) < 2 or (history[0].time - history[-1].time) < period:
-            # insufficient history to calculate, return a value that should prevent
-            # sleep while more data is gathered
+        if len(history) < 2:
+            # first run, insufficient history
             return inf
 
         recent, old = history[0], history[-1]
 
-        if recent.bytes < old.bytes:
-            raise ValueError("Bytes in history DECREASED, something is broken.")
+        if recent.bytes < old.bytes or recent.time - old.time < period:
+            # (qbittorrent was restarted) or (insufficient history)
+            # qbittorrent was restarted: eventually old history will be cleaned, inhibit sleep until then
+            # insufficient history: inhibit sleep until we have more data
+            return inf
 
         delta_kb = (recent.bytes - old.bytes) / BYTES_PER_KB
         delta_sec = (recent.time - old.time).total_seconds()
@@ -92,8 +94,8 @@ class QbittorrentInhibitor(InhibitingProcess):
             while len(history) > 2 and history[-1].time < (now - period) and history[-2].time <= (now - period):
                 history.pop()
             # removes prior history when it appears qbittorrent has been restarted
-            while len(history) > 1 and history[-1].bytes > history[0].bytes:
-                history.pop()
+            # while len(history) > 1 and history[-1].bytes > history[0].bytes:
+            #     history.pop()
 
         def add_new(history: Deque[TimeBytes], num_bytes) -> None:
             history.appendleft(TimeBytes(time=now, bytes=num_bytes))

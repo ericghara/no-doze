@@ -78,7 +78,6 @@ class TestQbittorrentInhibitorSingleChannel(TestCase):
             session_b += delta_transfer_b[i]
             self._set_next_transfer_info_response(download_bytes=session_b)
             found = self.inhibitor.does_inhibit()
-            print(self.inhibitor._download_history)
             self.assertEquals(found, expected[i], f"check period # {i}")
             time.sleep(check_period_sec)
 
@@ -146,12 +145,12 @@ class TestQbittorrentInhibitorSingleChannel(TestCase):
         found_kbps = self.inhibitor._calc_mean_kbps_in_window(history=window, period=period)
         self.assertEqual(inf, found_kbps)
 
-    def test__calc_mean_kbps_in_window_raises_when_bytes_decreases(self):
+    def test__calc_mean_kbps_in_window_returns_inf_when_bytes_decrease(self):
         now = datetime.now()
         period = timedelta(seconds=0.5)
         window = deque([TimeBytes(time=now, bytes=512),
                         TimeBytes(time=now - period, bytes=1024)])
-        self.assertRaises(ValueError, lambda: self.inhibitor._calc_mean_kbps_in_window(history=window, period=period))
+        self.assertEqual(inf, self.inhibitor._calc_mean_kbps_in_window(history=window, period=period))
 
     ## End redundant tests
 
