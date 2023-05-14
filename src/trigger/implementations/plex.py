@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from plexapi.base import PlexSession
 from plexapi.server import PlexServer
 
-from src.sleep_inhibitor.inhibiting_process import InhibitingProcess
+from src.trigger.inhibiting_process import InhibitingProcess
 from src import config_provider
 
 config_root_key = "plex"

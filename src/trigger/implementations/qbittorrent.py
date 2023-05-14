@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from qbittorrentapi import Client
 
 from src.config_provider import get_value
-from src.sleep_inhibitor.inhibiting_process import InhibitingProcess
+from src.trigger.inhibiting_process import InhibitingProcess
 
 config_root_key = "qbittorrent"
 username_key = "username"

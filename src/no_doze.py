@@ -1,64 +1,69 @@
 import datetime
 import logging
 import os
-import signal
-import subprocess
 import time
 from datetime import datetime, timedelta
 from typing import *
 
-from src.sleep_inhibitor.implementations.qbittorrent import QbittorrentInhibitor
 from src.config_provider import _config_yml
+from src.sleep_inhibitor import SleepInhibitor
+from src.trigger.implementations.plex import PlexInhibitor
+from src.trigger.implementations.qbittorrent import QbittorrentInhibitor
+from src.trigger.inhibiting_process import InhibitingProcess
 
-from src.sleep_inhibitor.inhibiting_process import InhibitingProcess
-from src.sleep_inhibitor.implementations.plex import PlexInhibitor
 
 class NoDoze:
     WHO = "No-Doze Service"
+    WHY = "A monitored process/event is in progress."
     WHAT = "sleep"
     MODE = "block"  # "delay" | "block"
     SYS_INHIBIT_PROG = "systemd-inhibit"
     SYS_SLEEP_PROG = "sleep"
-    PERIOD_OVERLAP = 1
 
-    def __init__(self, check_period_sec: float | int=None):
+    def __init__(self, check_period_sec: float | int = None):
         self.log = logging.getLogger(type(self).__name__)
         if check_period_sec is None:
             check_period_sec = _config_yml.get("check_period_sec", 0)
-
         self.check_period: timedelta = timedelta(seconds=check_period_sec)
-        self.check_period_with_overlap = self.check_period + timedelta(seconds=self.PERIOD_OVERLAP)
         self.inhibiting_processes = list()
-        # clean shutdown
-        for _signal in signal.SIGINT, signal.SIGTERM:
-            signal.signal(_signal, self.close)
+        self._sleep_inhibitor: Optional[SleepInhibitor] = None
 
     def run(self) -> None:
+        if not self._sleep_inhibitor:
+            raise ValueError("This was not properly opened.  Use in a with block.")
         next_start: datetime = datetime.now()
         while True:
             inhibiting_processes = self._find_inhibitors()
             next_start = next_start + self.check_period
             if (inhibiting_processes):
-                logging.debug(f"Inhibiting Processes: {inhibiting_processes}")
-
-                self._inhibit(inhibiting_processes=inhibiting_processes,
-                              until=next_start)
+                self._inhibit(inhibiting_processes=inhibiting_processes)
+            else:
+                self._no_inhibit()
             sleep_duration_sec = self._calc_sec_until(next_start)
             if sleep_duration_sec < 0:
                 # probably system went to sleep and woke up
-                logging.debug(f"Caught a negative sleep duration: {sleep_duration_sec }")
+                self.log.debug(f"Caught a negative sleep duration: {sleep_duration_sec}")
                 next_start = datetime.now()
                 continue
             time.sleep(sleep_duration_sec)
 
-    def close(self) -> None:
-        pass
+    def __enter__(self) -> 'NoDoze':
+        if self._sleep_inhibitor:
+            raise ValueError("Cannot re-open this resource, it is already open.")
+        self._sleep_inhibitor = SleepInhibitor(who=self.WHO, why=self.WHY)
+        self._sleep_inhibitor.__enter__()
+        return self
+
+    def __exit__(self, exc_type: any, exc_val: any, exc_tb: any):
+        if self._sleep_inhibitor:
+            self._sleep_inhibitor.__exit__(exc_type=exc_type, exc_val=exc_val, exc_tb=exc_tb)
+        self._sleep_inhibitor = None
 
     def _calc_sec_until(self, until: datetime) -> float:
         now = datetime.now()
-        sec = (until-now).total_seconds()
+        sec = (until - now).total_seconds()
         if (sec < 0):
-            logging.debug(f"Caught a negative sleep duration: {sec}")
+            self.log.debug(f"Caught a negative sleep duration: {sec}")
             return 0
         return sec
 
@@ -73,17 +78,31 @@ class NoDoze:
         """
         :param inhibitor:
         :return:
-        :raise: ValueError if the provided sleep_inhibitor was already registered
+        :raise: ValueError if the provided trigger was already registered
         """
         if inhibitor in self.inhibiting_processes:
-            raise ValueError(f"The sleep_inhibitor: {inhibitor.name} is already registered.")
+            raise ValueError(f"The trigger: {inhibitor.name} is already registered.")
         self.inhibiting_processes.append(inhibitor)
 
-    def _inhibit(self, inhibiting_processes: List[InhibitingProcess], until: datetime) -> subprocess.Popen:
-        why = self._generate_why(inhibiting_processes=inhibiting_processes, until=until)
-        inhibit_command = self._generate_inhibit_command(why=why, until=until)
-        self.log.debug(f"Running: {inhibit_command}")
-        return subprocess.Popen(inhibit_command, shell=True)
+    def _inhibit(self, inhibiting_processes: List[InhibitingProcess]) -> bool:
+        self.log.debug(f"Inhibition required for the next period, due to Inhibiting Processes: {inhibiting_processes}.")
+        if (self._sleep_inhibitor.is_inhibiting()):
+            self.log.debug("Continuing an ongoing sleep inhibition, no new lock taken.")
+            return False
+        else:
+            self.log.debug("Beginning a new sleep inhibition, lock will be taken.")
+            self._sleep_inhibitor.inhibit_sleep()
+            return True
+
+    def _no_inhibit(self) -> bool:
+        self.log.debug(f"No Inhibiting processes.  Sleep allowed for next period.")
+        if self._sleep_inhibitor.is_inhibiting():
+            self.log.debug("Ending the inhibition currently in place. Returning a sleep inhibition lock.")
+            self._sleep_inhibitor.allow_sleep()
+            return True
+        else:
+            self.log.debug("No sleep inhibition is currently in place.  Doing nothing.")
+            return False
 
     def _generate_why(self, inhibiting_processes: List[InhibitingProcess], until: datetime) -> str:
         process_names = list()
@@ -99,10 +118,10 @@ class NoDoze:
 
 def main() -> None:
     logging.basicConfig(level=logging.DEBUG)
-    no_doze = NoDoze()
-    no_doze.add_inhibitor(PlexInhibitor())
-    no_doze.add_inhibitor(QbittorrentInhibitor())
-    no_doze.run()
+    with NoDoze() as no_doze:
+        no_doze.add_inhibitor(PlexInhibitor())
+        no_doze.add_inhibitor(QbittorrentInhibitor())
+        no_doze.run()
 
 
 if __name__ == "__main__":

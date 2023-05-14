@@ -7,7 +7,7 @@ from unittest import TestCase
 from unittest.mock import Mock, patch
 from src import config_provider
 
-from src.sleep_inhibitor.implementations.qbittorrent import TimeBytes, QbittorrentInhibitor
+from src.trigger.implementations.qbittorrent import TimeBytes, QbittorrentInhibitor
 
 class TestQbittorrentInhibitorSingleChannel(TestCase):
 
@@ -24,7 +24,7 @@ class TestQbittorrentInhibitorSingleChannel(TestCase):
     def setUp(self) -> None:
         config_provider._load_string(self.single_channel_yml)
         self.template_mock = Mock()
-        self.qb_client_patch = patch("src.sleep_inhibitor.implementations.qbittorrent.Client", return_value=self.template_mock).start()
+        self.qb_client_patch = patch("src.trigger.implementations.qbittorrent.Client", return_value=self.template_mock).start()
         self.inhibitor = QbittorrentInhibitor()
 
     def tearDown(self) -> None:
@@ -173,7 +173,7 @@ class TestQbittorrentInhibitorDualChannel(TestCase):
     def setUp(self) -> None:
         config_provider._load_string(self.dual_channel_yml)
         self.template_mock = Mock()
-        self.qb_client_patch = patch("src.sleep_inhibitor.implementations.qbittorrent.Client", return_value=self.template_mock).start()
+        self.qb_client_patch = patch("src.trigger.implementations.qbittorrent.Client", return_value=self.template_mock).start()
         self.inhibitor = QbittorrentInhibitor()
 
     def tearDown(self) -> None:
