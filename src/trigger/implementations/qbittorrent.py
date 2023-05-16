@@ -1,13 +1,12 @@
 import logging
-import traceback
-from collections import namedtuple, deque
-from math import inf
-from typing import NamedTuple, Deque
+import sys
 from datetime import datetime, timedelta
+from enum import Enum
+from typing import NamedTuple, Optional
 
 from qbittorrentapi import Client
 
-from src.config_provider import get_value
+from src import config_provider
 from src.trigger.inhibiting_process import InhibitingProcess
 
 config_root_key = "qbittorrent"
@@ -16,7 +15,7 @@ password_key = "password"
 host_key = "host_url"
 download_key = "downloading"
 seed_key = "seeding"
-stalled_key = "period_min"
+period_min_key = "period_min"
 speed_key = "min_speed_kbps"
 
 
@@ -29,93 +28,72 @@ BYTES_PER_KB = 1024
 
 
 class QbittorrentInhibitor(InhibitingProcess):
-    """
-    Allows inhibition based on average transfer rate over a period.  Uses a sliding window and session transfer statistics
-    from the qBittorrent API to calculate the average rate.
-    """
+    class Channel(Enum):
+        SEEDING = "seeding"
+        DOWNLOADING = "downloading"
 
-    def __init__(self):
-        super().__init__("QBittorrent Transfer(s)")
-        self._log = logging.getLogger(type(self).__name__)
+    def __init__(self, channel: Channel):
+        self._channel: QbittorrentInhibitor.Channel = channel
+        name = f"{type(self).__name__} - {channel.value}"
+        super().__init__(name=name, period=self._get_period())
+        self._log = logging.getLogger(name)
         self._template = self._create_client_template()
-        # download
-        download_timeout = float(get_value([config_root_key, download_key, stalled_key], "0")) # 0 disables
-        self._min_download_speed = float(get_value([config_root_key, download_key, speed_key], "inf"))
-        self._validate_period_speed(period=download_timeout, min_speed=self._min_download_speed)
-        self._download_period = timedelta(minutes=download_timeout)
-        # seed
-        seed_timeout = float(get_value([config_root_key, seed_key, stalled_key], "0")) # 0 disables
-        self._min_seed_speed = float(get_value([config_root_key, seed_key, speed_key], "inf"))
-        self._validate_period_speed(period=seed_timeout, min_speed=self._min_seed_speed)
-        self._seed_period = timedelta(minutes=seed_timeout)
+        ## Initialize channel specific variables
+        self._min_speed_kbps: Optional[float] = self._get_min_speed_kbps()
+        self._data_transferred_key: Optional[str] = self._get_data_transferred_key()
 
-        self._download_history = deque()
-        self._seed_history = deque()
+        self._last_reading: TimeBytes = TimeBytes(time=datetime.now(),
+                                                  bytes=sys.maxsize)  # sentinel, forces inhibition for first period
 
-    def does_inhibit(self) -> bool:
-        if not self._min_download_speed or not self._min_seed_speed:
-            # A disabled state, no network call is made, never inhibit
-            return False
-        self._update_history()
-        if self._calc_mean_kbps_in_window(self._download_history, self._download_period) >= self._min_download_speed:
-            return True
-        return self._calc_mean_kbps_in_window(self._seed_history, self._seed_period) >= self._min_seed_speed
+    def _get_channel_key(self) -> str:
+        if self._channel is self.Channel.SEEDING:
+            return seed_key
+        elif self._channel is self.Channel.DOWNLOADING:
+            return download_key
+        else:
+            raise ValueError("Unrecognized enum. Something is very wrong.")
 
-    def _calc_mean_kbps_in_window(self, history: Deque[TimeBytes], period: timedelta) -> float:
-        if len(history) < 2:
-            # first run, insufficient history
-            return inf
+    def _get_period(self) -> timedelta:
+        return config_provider.get_period_min([config_root_key, self._get_channel_key(), period_min_key])
 
-        recent, old = history[0], history[-1]
+    def _get_min_speed_kbps(self) -> float:
+        raw_val = config_provider.get_value([config_root_key, self._get_channel_key(), speed_key])
+        return float(raw_val)
 
-        if recent.bytes < old.bytes or recent.time - old.time < period:
-            # (qbittorrent was restarted) or (insufficient history)
-            # qbittorrent was restarted: eventually old history will be cleaned, inhibit sleep until then
-            # insufficient history: inhibit sleep until we have more data
-            return inf
+    def _get_data_transferred_key(self) -> str:
+        return 'dl_info_data' if self._channel is QbittorrentInhibitor.Channel.DOWNLOADING else "up_info_data"
 
-        delta_kb = (recent.bytes - old.bytes) / BYTES_PER_KB
-        delta_sec = (recent.time - old.time).total_seconds()
-        return delta_kb / delta_sec
+    def _create_client_template(self) -> Client:
+        host_url = config_provider.get_value([config_root_key, host_key])
+        username = config_provider.get_value([config_root_key, username_key], "")
+        password = config_provider.get_value([config_root_key, username_key], "")
+        return Client(host=host_url, username=username, password=password)
 
-    def _update_history(self) -> None:
+    def _fetch_reading(self) -> TimeBytes:
         try:
             response = self._template.transfer_info()
         except Exception as e:
             self._log.info("Suppressed an error from template, run with debug to get full stacktrace.")
             self._log.debug(e)
             response = {}
-        now = datetime.now()
-        download_bytes = response.get("dl_info_data", 0)  # total bytes downloaded during session
-        seed_bytes = response.get("up_info_data", 0)
+        transferred = response.get(self._data_transferred_key, 0)
+        return TimeBytes(time=datetime.now(), bytes=transferred)
 
-        def clean_history(history: Deque[TimeBytes], period: timedelta):
-            # removes expired history
-            while len(history) > 2 and history[-1].time < (now - period) and history[-2].time <= (now - period):
-                history.pop()
-            # removes prior history when it appears qbittorrent has been restarted
-            # while len(history) > 1 and history[-1].bytes > history[0].bytes:
-            #     history.pop()
-
-        def add_new(history: Deque[TimeBytes], num_bytes) -> None:
-            history.appendleft(TimeBytes(time=now, bytes=num_bytes))
-
-        add_new(self._download_history, download_bytes)
-        clean_history(self._download_history, self._download_period)
-
-        add_new(self._seed_history, seed_bytes)
-        clean_history(self._seed_history, self._seed_period)
-
-
-    def _validate_period_speed(self, period, min_speed) -> None:
-        if min_speed != inf and period == 0 or period != 0 and min_speed == inf:
-            raise ValueError(f"Improper configuration, {speed_key} and {stalled_key} contradict.  "
-                             f"If a speed floor is set a period is required.")
-        if period < 0 or min_speed < 0:
-            raise ValueError("Durations and speeds must be >= 0.")
-
-    def _create_client_template(self) -> Client:
-        host_url = get_value([config_root_key, host_key])
-        username = get_value([config_root_key, username_key], "")
-        password = get_value([config_root_key, username_key], "")
-        return Client(host=host_url, username=username, password=password)
+    def does_inhibit(self) -> bool:
+        cur_reading: TimeBytes = self._fetch_reading()
+        seconds_elapsed = (cur_reading.time - self._last_reading.time).total_seconds()
+        byte_delta = cur_reading.bytes - self._last_reading.bytes
+        self._last_reading = cur_reading
+        if seconds_elapsed > (1.5 * self.period().total_seconds()):
+            self._log.debug(
+                "Excessive time passed between periods.  If system did not just wake up from sleep this indicates a problem.")
+            # we need more data, inhibit sleep.
+            return True
+        if byte_delta < 0:
+            self._log.debug(
+                "Encountered a negative byte delta.  This could indicate a problem if qbittorrent was not recently restarted.")
+            # we need more data, inhibit sleep.
+            return True
+        if seconds_elapsed <= 0:
+            raise ValueError("Time between readings was <= 0")
+        return byte_delta / (seconds_elapsed * BYTES_PER_KB) >= self._min_speed_kbps

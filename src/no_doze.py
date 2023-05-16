@@ -2,14 +2,22 @@ import datetime
 import logging
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import *
 
-from src.config_provider import _config_yml
+from src.priority_queue import PriorityQueue
 from src.sleep_inhibitor import SleepInhibitor
 from src.trigger.implementations.plex import PlexInhibitor
 from src.trigger.implementations.qbittorrent import QbittorrentInhibitor
 from src.trigger.inhibiting_process import InhibitingProcess
+
+
+class ScheduledCheck(NamedTuple):
+    time: datetime
+    inhibiting_process: InhibitingProcess
+
+    def __lt__(self, other: 'ScheduledCheck'):
+        return self.time < other.time
 
 
 class NoDoze:
@@ -17,35 +25,63 @@ class NoDoze:
     WHY = "A monitored process/event is in progress."
     WHAT = "sleep"
     MODE = "block"  # "delay" | "block"
-    SYS_INHIBIT_PROG = "systemd-inhibit"
-    SYS_SLEEP_PROG = "sleep"
 
-    def __init__(self, check_period_sec: float | int = None):
+    def __init__(self):
         self.log = logging.getLogger(type(self).__name__)
-        if check_period_sec is None:
-            check_period_sec = _config_yml.get("check_period_sec", 0)
-        self.check_period: timedelta = timedelta(seconds=check_period_sec)
         self.inhibiting_processes = list()
+        self._schedule: Optional[PriorityQueue[ScheduledCheck]] = PriorityQueue()
         self._sleep_inhibitor: Optional[SleepInhibitor] = None
+        self._inhibit_until = datetime.now()
 
     def run(self) -> None:
         if not self._sleep_inhibitor:
             raise ValueError("This was not properly opened.  Use in a with block.")
-        next_start: datetime = datetime.now()
+        if not self.inhibiting_processes:
+            raise ValueError("Cannot start without any inhibiting processes.  Check your configuration.")
+
         while True:
-            inhibiting_processes = self._find_inhibitors()
-            next_start = next_start + self.check_period
-            if (inhibiting_processes):
-                self._inhibit(inhibiting_processes=inhibiting_processes)
-            else:
-                self._no_inhibit()
-            sleep_duration_sec = self._calc_sec_until(next_start)
-            if sleep_duration_sec < 0:
-                # probably system went to sleep and woke up
-                self.log.debug(f"Caught a negative sleep duration: {sleep_duration_sec}")
-                next_start = datetime.now()
-                continue
-            time.sleep(sleep_duration_sec)
+            self._handle_period()
+
+    def _handle_period(self) -> None:
+        """
+        Updates state of `SleepInhibitor` if necessary
+
+        *note* this was separated from `run` to facilitate testing.
+        """
+
+        next_check: datetime = self._schedule.peek().time
+        sleep_duration_sec = self._calc_sec_until(next_check)
+        time.sleep(sleep_duration_sec)
+        self._handle_scheduled_checks()
+
+        if self._inhibit_until > datetime.now():
+            self._inhibit()
+        else:
+            self._no_inhibit()
+
+    def _handle_scheduled_checks(self) -> None:
+        """
+        Runs scheduled checks and updates the schedule with checks to be run in the future.
+        *Note:* length of the schedule changes consistent between periods.  Every scheduled check that is
+        removed is updated and reinserted at a future time in the schedule.
+        """
+        while datetime.now() >= self._schedule.peek().time:
+            last_scheduled_time, inhibiting_process = self._schedule.poll()
+            scheduled_time = last_scheduled_time + inhibiting_process.period()
+            # We woke up from sleep or something delayed checking
+            if scheduled_time < datetime.now():
+                self.log.debug(
+                    "Unable to keep up with schedule.  If system did not recently return from sleep there is a problem.")
+                scheduled_time = datetime.now() + inhibiting_process.period()
+            if inhibiting_process.does_inhibit():
+                if scheduled_time > self._inhibit_until:
+                    self._inhibit_until = scheduled_time
+                    self.log.debug(
+                        f"Process: {inhibiting_process} requires a new inhibition or extension of the current inhibition until: {scheduled_time}.")
+                else:
+                    self.log.debug(
+                        f"Inhibition already satisfied: Process: {inhibiting_process} requires inhibition until {scheduled_time}.")
+            self._schedule.offer(ScheduledCheck(time=scheduled_time, inhibiting_process=inhibiting_process))
 
     def __enter__(self) -> 'NoDoze':
         if self._sleep_inhibitor:
@@ -67,13 +103,6 @@ class NoDoze:
             return 0
         return sec
 
-    def _find_inhibitors(self) -> List[InhibitingProcess]:
-        inhibited = list()
-        for process in self.inhibiting_processes:
-            if process.does_inhibit():
-                inhibited.append(process)
-        return inhibited
-
     def add_inhibitor(self, inhibitor: InhibitingProcess) -> None:
         """
         :param inhibitor:
@@ -83,9 +112,10 @@ class NoDoze:
         if inhibitor in self.inhibiting_processes:
             raise ValueError(f"The trigger: {inhibitor.name} is already registered.")
         self.inhibiting_processes.append(inhibitor)
+        self._schedule.offer(ScheduledCheck(time=datetime.now(), inhibiting_process=inhibitor))
 
-    def _inhibit(self, inhibiting_processes: List[InhibitingProcess]) -> bool:
-        self.log.debug(f"Inhibition required for the next period, due to Inhibiting Processes: {inhibiting_processes}.")
+    def _inhibit(self) -> bool:
+        self.log.debug(f"Inhibition required for the next period.")
         if (self._sleep_inhibitor.is_inhibiting()):
             self.log.debug("Continuing an ongoing sleep inhibition, no new lock taken.")
             return False
@@ -104,23 +134,13 @@ class NoDoze:
             self.log.debug("No sleep inhibition is currently in place.  Doing nothing.")
             return False
 
-    def _generate_why(self, inhibiting_processes: List[InhibitingProcess], until: datetime) -> str:
-        process_names = list()
-        for process in inhibiting_processes:
-            process_names.append(process.name)
-        return f"Monitored processes: {', '.join(process_names)} are preventing sleep until: {until.time()}"
-
-    def _generate_inhibit_command(self, why: str, until: datetime) -> str:
-        sleep_duration_sec = self._calc_sec_until(until)
-        return f'{self.SYS_INHIBIT_PROG} --who="{self.WHO}" --what="{self.WHAT}" --why="{why}" --mode="{self.MODE}" ' \
-               f'{self.SYS_SLEEP_PROG} {sleep_duration_sec}'
-
 
 def main() -> None:
-    logging.basicConfig(level=logging.DEBUG)
     with NoDoze() as no_doze:
         no_doze.add_inhibitor(PlexInhibitor())
-        no_doze.add_inhibitor(QbittorrentInhibitor())
+        no_doze.add_inhibitor(QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.DOWNLOADING))
+        no_doze.add_inhibitor(QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.SEEDING))
+        # no_doze.add_inhibitor(AlwaysInhibits(period=timedelta(seconds=10)))
         no_doze.run()
 
 

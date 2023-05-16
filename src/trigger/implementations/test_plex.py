@@ -1,12 +1,10 @@
 import time
 import unittest
 from datetime import timedelta
-
-import yaml
-
-from src.trigger.implementations.plex import PlexInhibitor
 from unittest.mock import patch, Mock
+
 import src.config_provider as config_provider
+from src.trigger.implementations.plex import PlexInhibitor
 
 
 class PlexTest(unittest.TestCase):
@@ -16,13 +14,14 @@ class PlexTest(unittest.TestCase):
                 plex:
                     token: "A1AAAAAAAAAAA_AAAAA1"
                     base_url: "http://localhost:12345"
-                    pause_timeout_min: 999
+                    period_min: .0005 # 30 ms
+                    max_periods_paused: 2
                 """
         config_provider._load_string(yml_str)
         # This is the plex server constructed by PlexServer() constructor
         self.templateMock = Mock()
         # This patches the PlexServer import
-        self.plexPatch = patch("src.trigger.implementations.plex.PlexServer", return_value=self.templateMock )
+        self.plexPatch = patch("src.trigger.implementations.plex.PlexServer", return_value=self.templateMock)
         self.plexServerMock = self.plexPatch.start()
 
         self.inhibitor = PlexInhibitor()
@@ -32,21 +31,22 @@ class PlexTest(unittest.TestCase):
             patch.stop()
 
     def test_template_has_expected_configuration(self):
-            self.plexServerMock.assert_called_with(token="A1AAAAAAAAAAA_AAAAA1", baseurl="http://localhost:12345")
+        self.plexServerMock.assert_called_with(token="A1AAAAAAAAAAA_AAAAA1", baseurl="http://localhost:12345")
 
     def test_pause_timeout_configuration(self):
-        self.assertEqual(timedelta(minutes=999), self.inhibitor._get_pause_timeout() )
+        self.assertEqual(timedelta(minutes=.0010), self.inhibitor._generate_pause_timeout())
 
     def test_does_inhibit_returns_true_when_media_buffering(self):
         sessionMock = Mock()
         sessionMock.player.state = "buffering"
         self.templateMock.sessions = lambda: [sessionMock]
-        self.assertTrue( self.inhibitor.does_inhibit() )
+        self.assertTrue(self.inhibitor.does_inhibit())
+
     def test_does_inhibit_returns_true_when_media_playing(self):
         sessionMock = Mock()
         sessionMock.player.state = "playing"
         self.templateMock.sessions = lambda: [sessionMock]
-        self.assertTrue( self.inhibitor.does_inhibit() )
+        self.assertTrue(self.inhibitor.does_inhibit())
 
     def test_does_inhibit_when_only_playback_stream_recently_paused(self):
         sessionMock = Mock()
@@ -65,7 +65,7 @@ class PlexTest(unittest.TestCase):
         self.templateMock.sessions = lambda: [sessionMock]
 
         self.inhibitor.pause_timeout = timedelta(milliseconds=30)
-        self.inhibitor.does_inhibit() # should record a paused session
+        self.inhibitor.does_inhibit()  # should record a paused session
         self.assertTrue(self.inhibitor.does_inhibit())
 
     def test_does_not_inhibit_when_only_black_stream_paused_longer_than_timeout(self):
@@ -78,7 +78,7 @@ class PlexTest(unittest.TestCase):
         self.inhibitor.pause_timeout = timedelta(milliseconds=30)
         self.inhibitor.does_inhibit()
         time.sleep(.030)
-        self.assertFalse(self.inhibitor.does_inhibit() )
+        self.assertFalse(self.inhibitor.does_inhibit())
 
     def test_does_inhibit_when_two_paused_playback_one_shorter_than_timeout(self):
         self.inhibitor.pause_timeout = timedelta(milliseconds=30)
@@ -93,13 +93,13 @@ class PlexTest(unittest.TestCase):
         sessionMock1.player.machineIdentifier = "abc123"
         sessionMock1.title = "test video2"
 
-        self.templateMock.sessions = lambda: [sessionMock1] # only sessionMock1
+        self.templateMock.sessions = lambda: [sessionMock1]  # only sessionMock1
         self.inhibitor.does_inhibit()
         time.sleep(0.015)
-        self.templateMock.sessions = lambda: [sessionMock1, sessionMock2] # both mocks
+        self.templateMock.sessions = lambda: [sessionMock1, sessionMock2]  # both mocks
         self.inhibitor.does_inhibit()
         time.sleep(0.016)  # session1 should be > 30ms old, session2 ~16 ms
-        self.assertTrue(self.inhibitor.does_inhibit()) # session2 inhibits
+        self.assertTrue(self.inhibitor.does_inhibit())  # session2 inhibits
 
     def test_playback_forgets_paused_state_after_play(self):
         self.inhibitor.pause_timeout = timedelta(milliseconds=30)
@@ -114,8 +114,8 @@ class PlexTest(unittest.TestCase):
         sessionMock1.player.state = "playing"
         self.inhibitor.does_inhibit()  # should clear previous pause
         time.sleep(0.16)
-        sessionMock1.player.state = "paused" # first pause > 30 ms ago should be cleared
-        self.assertTrue(self.inhibitor.does_inhibit() ) # the new pause can inhibit
+        sessionMock1.player.state = "paused"  # first pause > 30 ms ago should be cleared
+        self.assertTrue(self.inhibitor.does_inhibit())  # the new pause can inhibit
 
     def test_playback_paused_beyond_timeout_inhibits_when_played_again(self):
         self.inhibitor.pause_timeout = timedelta(milliseconds=30)
@@ -126,11 +126,10 @@ class PlexTest(unittest.TestCase):
         sessionMock1.title = "test video1"
         self.templateMock.sessions = lambda: [sessionMock1]
         self.inhibitor.does_inhibit()
-        time.sleep(0.31) # paused beyond timeout
-        self.assertFalse(self.inhibitor.does_inhibit() ) # no longer inhibits
+        time.sleep(0.31)  # paused beyond timeout
+        self.assertFalse(self.inhibitor.does_inhibit())  # no longer inhibits
         sessionMock1.player.state = "playing"
-        self.assertTrue(self.inhibitor.does_inhibit() ) # does inhibit
-
+        self.assertTrue(self.inhibitor.does_inhibit())  # does inhibit
 
 
 if __name__ == '__main__':

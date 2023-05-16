@@ -1,3 +1,4 @@
+from datetime import timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -6,16 +7,20 @@ import yaml
 _config_path = Path(__file__).parent / "resources/config.yml"
 _config_yml: dict = {}
 
+
 def _load_file() -> None:
     global _config_yml
     with _config_path.open() as f:
         _config_yml = yaml.load(f, Loader=yaml.CLoader)
 
+
 def _load_string(yml_str: str) -> None:
-    global  _config_yml
+    global _config_yml
     _config_yml = yaml.load(yml_str, Loader=yaml.CLoader)
 
+
 _load_file()
+
 
 def get_value(key_path: list[str], default_val: Optional[str] = None) -> str:
     """
@@ -44,3 +49,9 @@ def get_value(key_path: list[str], default_val: Optional[str] = None) -> str:
         return str(found_val)
     raise ValueError("Yaml schema contained dict or list where a scalar was expected. ")
 
+
+def get_period_min(key_path: list[str]) -> timedelta:
+    raw_min = float(get_value(key_path))
+    if raw_min is None:
+        return timedelta.max
+    return timedelta(minutes=raw_min)

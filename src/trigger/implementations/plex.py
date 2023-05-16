@@ -1,26 +1,31 @@
 import logging
-from typing import List, Dict
 from datetime import datetime, timedelta
+from math import inf
+from typing import List, Dict
 
 from plexapi.base import PlexSession
 from plexapi.server import PlexServer
 
-from src.trigger.inhibiting_process import InhibitingProcess
 from src import config_provider
+from src.trigger.inhibiting_process import InhibitingProcess
 
 config_root_key = "plex"
 token_key = "token"
 base_url_key = "base_url"
-pause_timeout_key = "pause_timeout_min"  # optional, defaults to 0
+period_key = "period_min"
+pause_periods_key = "max_periods_paused"
+
 
 
 class PlexInhibitor(InhibitingProcess):
 
     def __init__(self):
-        super().__init__("Plex Playback")
+        period = config_provider.get_period_min([config_root_key, period_key])
+        super().__init__(name="Plex Playback", period=period)
         self.log = logging.getLogger(type(self).__name__)
         self.template: PlexServer = self._create_server_template()
-        self.pause_timeout: timedelta = self._get_pause_timeout()
+
+        self.pause_timeout: timedelta = self._generate_pause_timeout()
         self.paused: Dict[str, datetime] = dict()
 
     def _create_server_template(self) -> PlexServer:
@@ -30,9 +35,11 @@ class PlexInhibitor(InhibitingProcess):
             raise ValueError("Problem parsing server info from config file.")
         return PlexServer(baseurl=base_url, token=token)
 
-    def _get_pause_timeout(self) -> timedelta:
-        raw_min = config_provider.get_value([config_root_key, pause_timeout_key], "0")
-        return timedelta(minutes=float(raw_min) )
+    def _generate_pause_timeout(self) -> timedelta:
+        pause_periods = round(float(config_provider.get_value([config_root_key, pause_periods_key])), 0)
+        if pause_periods == inf:
+            return timedelta.max
+        return pause_periods * self.period()
 
     def _fetch_sessions(self) -> List[PlexSession]:
         try:
