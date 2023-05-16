@@ -54,10 +54,18 @@ class QbittorrentInhibitor(InhibitingProcess):
             raise ValueError("Unrecognized enum. Something is very wrong.")
 
     def _get_period(self) -> timedelta:
-        return config_provider.get_period_min([config_root_key, self._get_channel_key(), period_min_key])
+        """
+        If no key found effectively disables by setting period to 'sys.maxvalue'
+        :return:
+        """
+        return config_provider.get_period_min(key_path=[config_root_key, self._get_channel_key(), period_min_key], default=timedelta.max)
 
     def _get_min_speed_kbps(self) -> float:
-        raw_val = config_provider.get_value([config_root_key, self._get_channel_key(), speed_key])
+        """
+        If no key found effectively disables by setting max speed to `inf`
+        :return:
+        """
+        raw_val = config_provider.get_value([config_root_key, self._get_channel_key(), speed_key], 'inf')
         return float(raw_val)
 
     def _get_data_transferred_key(self) -> str:
@@ -97,3 +105,7 @@ class QbittorrentInhibitor(InhibitingProcess):
         if seconds_elapsed <= 0:
             raise ValueError("Time between readings was <= 0")
         return byte_delta / (seconds_elapsed * BYTES_PER_KB) >= self._min_speed_kbps
+
+def register(registrar: 'InhibitingProcessRegistrar'):
+    registrar.accept(QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.DOWNLOADING))
+    registrar.accept(QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.SEEDING))

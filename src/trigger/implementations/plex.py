@@ -1,7 +1,8 @@
 import logging
+import sys
 from datetime import datetime, timedelta
 from math import inf
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from plexapi.base import PlexSession
 from plexapi.server import PlexServer
@@ -19,11 +20,18 @@ pause_periods_key = "max_periods_paused"
 
 class PlexInhibitor(InhibitingProcess):
 
+    """
+    if no `period_min` key is found service is disabled, with the period being set to a very large value.
+    """
+
     def __init__(self):
-        period = config_provider.get_period_min([config_root_key, period_key])
-        super().__init__(name="Plex Playback", period=period)
         self.log = logging.getLogger(type(self).__name__)
-        self.template: PlexServer = self._create_server_template()
+        period = config_provider.get_period_min(key_path=[config_root_key, period_key], default=timedelta.max)
+        super().__init__(name="Plex Playback", period=period)
+        if period == sys.maxsize:
+            self.log.info("Plex Inhibitor was disabled by config.")
+
+        self.template: Optional[PlexServer] = None # delay instantiation PlexServer attempts to create a connection immediately
 
         self.pause_timeout: timedelta = self._generate_pause_timeout()
         self.paused: Dict[str, datetime] = dict()
@@ -42,6 +50,8 @@ class PlexInhibitor(InhibitingProcess):
         return pause_periods * self.period()
 
     def _fetch_sessions(self) -> List[PlexSession]:
+        if not self.template:
+            self.template = self._create_server_template()
         try:
             return self.template.sessions()
         except Exception as e:
@@ -81,3 +91,7 @@ class PlexInhibitor(InhibitingProcess):
                 currently_paused.append(session)
         inhibited |= self._update_paused(currently_paused)
         return inhibited
+
+
+def register(registrar: 'InhibitingProcessRegistrar'):
+    registrar.accept(PlexInhibitor())

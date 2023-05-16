@@ -31,6 +31,10 @@ class PlexTest(unittest.TestCase):
             patch.stop()
 
     def test_template_has_expected_configuration(self):
+        sessionMock = Mock()
+        sessionMock.player.state = "buffering"
+        self.templateMock.sessions = lambda: [sessionMock]
+        self.inhibitor.does_inhibit()
         self.plexServerMock.assert_called_with(token="A1AAAAAAAAAAA_AAAAA1", baseurl="http://localhost:12345")
 
     def test_pause_timeout_configuration(self):

@@ -3,6 +3,11 @@ from typing import Optional
 
 from src.trigger.inhibiting_process import InhibitingProcess
 
+"""
+These implementations are for testing.  They **do not** AutoRegister or pull properties from the config.yml.  
+While they could be useful as templates for custom implementations, it would be useful to refer to some other 
+implementations as well.
+"""
 
 class AlwaysInhibits(InhibitingProcess):
 
@@ -26,7 +31,7 @@ class ProgrammableInhibitor(InhibitingProcess):
     """
     An inhibitor where the return value of `does_inhibit` should be set before each call.  Calling `does_inhibit` pops
     the previously set value.  A subsequent call to `set_next` must be made before calling `does_inhibit` again.  Return
-    values *cannot* be stacked, they should be set and polled one at a time.
+    values *cannot* be stacked.  They should be sequentially, set then polled.
     """
 
     def __init__(self, period: timedelta):

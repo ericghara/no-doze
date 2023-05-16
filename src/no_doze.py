@@ -2,13 +2,13 @@ import datetime
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import *
 
+from src import config_provider
+from src.inhibiting_process_registrar import registrar
 from src.priority_queue import PriorityQueue
 from src.sleep_inhibitor import SleepInhibitor
-from src.trigger.implementations.plex import PlexInhibitor
-from src.trigger.implementations.qbittorrent import QbittorrentInhibitor
 from src.trigger.inhibiting_process import InhibitingProcess
 
 
@@ -25,10 +25,13 @@ class NoDoze:
     WHY = "A monitored process/event is in progress."
     WHAT = "sleep"
     MODE = "block"  # "delay" | "block"
+    _STARTUP_DELAY_KEY = "startup_delay_min"
 
     def __init__(self):
         self.log = logging.getLogger(type(self).__name__)
         self.inhibiting_processes = list()
+        self._startup_delay_min = config_provider.get_period_min(key_path=[self._STARTUP_DELAY_KEY],
+                                                                 default=timedelta(minutes=0))
         self._schedule: Optional[PriorityQueue[ScheduledCheck]] = PriorityQueue()
         self._sleep_inhibitor: Optional[SleepInhibitor] = None
         self._inhibit_until = datetime.now()
@@ -112,7 +115,7 @@ class NoDoze:
         if inhibitor in self.inhibiting_processes:
             raise ValueError(f"The trigger: {inhibitor.name} is already registered.")
         self.inhibiting_processes.append(inhibitor)
-        self._schedule.offer(ScheduledCheck(time=datetime.now(), inhibiting_process=inhibitor))
+        self._schedule.offer(ScheduledCheck(time=datetime.now()+self._startup_delay_min, inhibiting_process=inhibitor))
 
     def _inhibit(self) -> bool:
         self.log.debug(f"Inhibition required for the next period.")
@@ -136,11 +139,10 @@ class NoDoze:
 
 
 def main() -> None:
+    registrar.scan()
     with NoDoze() as no_doze:
-        no_doze.add_inhibitor(PlexInhibitor())
-        no_doze.add_inhibitor(QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.DOWNLOADING))
-        no_doze.add_inhibitor(QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.SEEDING))
-        # no_doze.add_inhibitor(AlwaysInhibits(period=timedelta(seconds=10)))
+        for inhibiting_process in registrar:
+            no_doze.add_inhibitor(inhibiting_process)
         no_doze.run()
 
 

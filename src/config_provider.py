@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from pathlib import Path
 from typing import Optional
@@ -7,6 +8,7 @@ import yaml
 _config_path = Path(__file__).parent / "resources/config.yml"
 _config_yml: dict = {}
 
+_log = logging.getLogger("config_provider")
 
 def _load_file() -> None:
     global _config_yml
@@ -42,6 +44,7 @@ def get_value(key_path: list[str], default_val: Optional[str] = None) -> str:
         val = val.get(key_path[i])
     if val is None:
         if default_val is not None:
+            _log.info(f"Unable to find value for key: {'.'.join(key_path)}, using default value {default_val}")
             return str(default_val)
         raise ValueError("Unable to provide a value.  Key not found.")
     found_val = val.get(key_path[-1])
@@ -50,8 +53,8 @@ def get_value(key_path: list[str], default_val: Optional[str] = None) -> str:
     raise ValueError("Yaml schema contained dict or list where a scalar was expected. ")
 
 
-def get_period_min(key_path: list[str]) -> timedelta:
-    raw_min = float(get_value(key_path))
+def get_period_min(key_path: list[str], default: timedelta) -> timedelta:
+    raw_min = float(get_value(key_path, None))
     if raw_min is None:
-        return timedelta.max
+        return default
     return timedelta(minutes=raw_min)
