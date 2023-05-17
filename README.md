@@ -13,10 +13,10 @@ can be defined as plug-ins through a straightforward `InhibitingConditions` inte
 
 These inhibiting conditions have been implemented:
 
-* **Plex Streaming** while a Plex server is actively streaming media to clients, sleep is prevented. After playback
+* **Plex Streaming**: while a Plex server is actively streaming media to clients, sleep is prevented. After playback
   completes sleep is allowed to resume.
-* **qBittorrent Downloading** while download rate remains above a certain threshold sleep is prevented.
-* **qBittorrent Seeding** while upload rate remains above a certain threshold sleep is prevented.
+* **qBittorrent Downloading**: while download rate remains above a certain threshold sleep is prevented.
+* **qBittorrent Seeding**: while upload rate remains above a certain threshold sleep is prevented.
 
 ## How It works
 
