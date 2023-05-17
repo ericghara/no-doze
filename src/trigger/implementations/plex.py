@@ -8,7 +8,7 @@ from plexapi.base import PlexSession
 from plexapi.server import PlexServer
 
 from src import config_provider
-from src.trigger.inhibiting_process import InhibitingProcess
+from src.trigger.inhibiting_condition import InhibitingCondition
 
 config_root_key = "plex"
 token_key = "token"
@@ -18,7 +18,7 @@ pause_periods_key = "max_periods_paused"
 
 
 
-class PlexInhibitor(InhibitingProcess):
+class PlexInhibitor(InhibitingCondition):
 
     """
     if no `period_min` key is found service is disabled, with the period being set to a very large value.

@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import Optional
 
-from src.trigger.inhibiting_process import InhibitingProcess
+from src.trigger.inhibiting_condition import InhibitingCondition
 
 """
 These implementations are for testing.  They **do not** AutoRegister or pull properties from the config.yml.  
@@ -9,7 +9,7 @@ While they could be useful as templates for custom implementations, it would be 
 implementations as well.
 """
 
-class AlwaysInhibits(InhibitingProcess):
+class AlwaysInhibits(InhibitingCondition):
 
     def __init__(self, period: timedelta):
         super().__init__(name=type(self).__name__, period=period)
@@ -18,7 +18,7 @@ class AlwaysInhibits(InhibitingProcess):
         return True
 
 
-class NeverInhibits(InhibitingProcess):
+class NeverInhibits(InhibitingCondition):
 
     def __init__(self, period: timedelta):
         super().__init__(name=type(self).__name__, period=period)
@@ -27,7 +27,7 @@ class NeverInhibits(InhibitingProcess):
         return False
 
 
-class ProgrammableInhibitor(InhibitingProcess):
+class ProgrammableInhibitor(InhibitingCondition):
     """
     An inhibitor where the return value of `does_inhibit` should be set before each call.  Calling `does_inhibit` pops
     the previously set value.  A subsequent call to `set_next` must be made before calling `does_inhibit` again.  Return

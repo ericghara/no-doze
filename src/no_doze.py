@@ -9,12 +9,12 @@ from src import config_provider
 from src.inhibiting_process_registrar import registrar
 from src.priority_queue import PriorityQueue
 from src.sleep_inhibitor import SleepInhibitor
-from src.trigger.inhibiting_process import InhibitingProcess
+from src.trigger.inhibiting_condition import InhibitingCondition
 
 
 class ScheduledCheck(NamedTuple):
     time: datetime
-    inhibiting_process: InhibitingProcess
+    inhibiting_process: InhibitingCondition
 
     def __lt__(self, other: 'ScheduledCheck'):
         return self.time < other.time
@@ -106,7 +106,7 @@ class NoDoze:
             return 0
         return sec
 
-    def add_inhibitor(self, inhibitor: InhibitingProcess) -> None:
+    def add_inhibitor(self, inhibitor: InhibitingCondition) -> None:
         """
         :param inhibitor:
         :return:

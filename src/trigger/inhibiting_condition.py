@@ -2,7 +2,7 @@ from abc import ABC
 from datetime import timedelta
 
 
-class InhibitingProcess(ABC):
+class InhibitingCondition(ABC):
     """
     Defines the interface of classes that can request sleep to be inhibited.  An `InhibitingProcess` is checked at defined
     `periods` by NoDoze.  The `period` is queried during start-up and remains fixed (aside from during system sleep
@@ -15,15 +15,15 @@ class InhibitingProcess(ABC):
     The duration of sleep is the `period`.  An `ImplementingProcess` that returns `True` on every `does_inhibit` call
     will inhabit sleep forever.
 
-    Implementors should ensure that calls to `does_inhibit` complete on the order of milliseconds.  InhibitingProcesses
+    Implementors should ensure that calls to `does_inhibit` complete on the order of milliseconds.  InhibitingConditions
     are checked sequentially and long-running calls to `does_inhibit` will prevent NoDoze from calling inhibitors during
     their scheduled periods.
 
-    Configurations for InhibitingProcesses should be included in the `resources.config.yml` file.  the `config_provider`
+    Configurations for InhibitingConditions should be included in the `resources.config.yml` file.  the `config_provider`
     module includes useful functions to parse fields from the `config.yml`.  Durations in the configuration should be
     specified in minutes wherever possible, for consistency across implementations.
 
-    In order to use an implementation, NoDoze is able to auto-discover InhibitingProcess implementations in the `implementations`
+    In order to use an implementation, NoDoze is able to auto-discover InhibitingConditionsimplementations in the `implementations`
     package.  All implementations should be a module (i.e. `my_implementation.py`) and placed into `implementations` folder.
     Each implementation should also include a `register` function that is called with the module is discovered.  Details
     of the register function implementation are provided below.
@@ -66,12 +66,12 @@ class InhibitingProcess(ABC):
 
 def register(registrar: 'InhibitingProcessRegistrar') -> None:
     """
-    Include this to make an implementation of InhibitingProcess auto-discoverable by NoDoze. Register should construct
-    an InhibitingProcess and then pass it to the registrar with `registrar.accept`.
+    Include this to make an implementation of InhibitingConditionsauto-discoverable by NoDoze. Register should construct
+    an InhibitingConditionsand then pass it to the registrar with `registrar.accept`.
 
-    It is possible to register multiple InhibitingProcesses in one call to register, so long as none of them would evalute
+    It is possible to register multiple InhibitingConditions in one call to register, so long as none of them would evalute
     to equal if compared.
 
     :param registrar: an InhibitingProcessRegistrar singleton
     """
-    registrar.accept(InhibitingProcess(name="Example", period=timedelta.max))
+    registrar.accept(InhibitingCondition(name="Example", period=timedelta.max))

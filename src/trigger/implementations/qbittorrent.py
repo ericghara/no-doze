@@ -7,7 +7,7 @@ from typing import NamedTuple, Optional
 from qbittorrentapi import Client
 
 from src import config_provider
-from src.trigger.inhibiting_process import InhibitingProcess
+from src.trigger.inhibiting_condition import InhibitingCondition
 
 config_root_key = "qbittorrent"
 username_key = "username"
@@ -27,7 +27,7 @@ class TimeBytes(NamedTuple):
 BYTES_PER_KB = 1024
 
 
-class QbittorrentInhibitor(InhibitingProcess):
+class QbittorrentInhibitor(InhibitingCondition):
     class Channel(Enum):
         SEEDING = "seeding"
         DOWNLOADING = "downloading"

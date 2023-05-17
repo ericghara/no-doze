@@ -4,7 +4,7 @@ import pkgutil
 from typing import Iterable
 
 import src.trigger.implementations as implementations
-from src.trigger.inhibiting_process import InhibitingProcess
+from src.trigger.inhibiting_condition import InhibitingCondition
 
 
 class InhibitingProcessRegistrar:
@@ -14,16 +14,16 @@ class InhibitingProcessRegistrar:
         self._inhibiting_processes = list()
         self._log = logging.getLogger(type(self).__name__)
 
-    def __contains__(self, item: InhibitingProcess) -> bool:
+    def __contains__(self, item: InhibitingCondition) -> bool:
         return item in self._inhibiting_processes
 
     def __len__(self) -> int:
         return len(self._inhibiting_processes)
 
-    def __iter__(self) -> Iterable[InhibitingProcess]:
+    def __iter__(self) -> Iterable[InhibitingCondition]:
         return self._inhibiting_processes.__iter__()
 
-    def accept(self, inhibiting_process: InhibitingProcess) -> None:
+    def accept(self, inhibiting_process: InhibitingCondition) -> None:
         if inhibiting_process in self:
             raise ValueError(f"Inhibiting Process: {inhibiting_process} has already been registered.")
         self._log.info(f"Registering {inhibiting_process.name}")
