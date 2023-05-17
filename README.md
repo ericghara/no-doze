@@ -22,7 +22,7 @@ These inhibiting conditions have been implemented:
 
 At its core, NoDoze is an event loop, which schedules checks for inhibiting conditions and prevents sleep while they occur.  
 
-NoDoze periodically checks all the registered `InhibitingConditions`, if at least one is met sleep is temporarily blocked.
+NoDoze periodically checks all the registered `InhibitingConditions`, if at least one is met, sleep is temporarily blocked.
 Implementors are directed to `src.trigger.inhibiting_condition` for more details.
 
 ## System Requirements
