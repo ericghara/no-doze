@@ -25,9 +25,9 @@ class NoDozeTest(unittest.TestCase):
         self.assertEqual(self.no_doze.inhibiting_processes, [self.process_stub], "Inhibiting conditions")
 
     def test_add_inhibitor_adds_to_schedule(self):
-        self.assertEquals(1, len(self.no_doze._schedule), "length")
+        self.assertEqual(1, len(self.no_doze._schedule), "length")
         item: ScheduledCheck = self.no_doze._schedule.peek()
-        self.assertEquals(item.inhibiting_process, self.process_stub, "expected inhibitor")
+        self.assertEqual(item.inhibiting_process, self.process_stub, "expected inhibitor")
         self.assertTrue(datetime.now() >= item.time and item.time + timedelta(milliseconds=10) > datetime.now(),
                         "Expected time")
 

@@ -76,7 +76,7 @@ class TestQbittorrentInhibitorSingleChannel(TestCase):
             session_b += delta_transfer_b[i]
             self._set_next_transfer_info_response(download_bytes=session_b)
             found = self.inhibitor.does_inhibit()
-            self.assertEquals(found, expected[i], f"check period # {i}")
+            self.assertEqual(found, expected[i], f"check period # {i}")
             time.sleep(check_period_sec)
 
     def test_does_inhibit_returns_true_when_data_transferred_decreases(self):
@@ -137,12 +137,12 @@ class TestQbittorrentInhibitorSeedingChannel(TestCase):
         self._set_next_transfer_info_response(download_bytes=0, seed_bytes=0)
         self.inhibitor.does_inhibit()
         sleep(0.030)
-        self._set_next_transfer_info_response(download_bytes=0, seed_bytes=310)
+        self._set_next_transfer_info_response(download_bytes=0, seed_bytes=315)
         self.assertTrue(self.inhibitor.does_inhibit())
 
     def test_does_inhibit_returns_false_when_rate_below_threshold(self):
         self._set_next_transfer_info_response(download_bytes=0, seed_bytes=0)
         self.inhibitor.does_inhibit()
         sleep(0.030)
-        self._set_next_transfer_info_response(download_bytes=0, seed_bytes=155)
+        self._set_next_transfer_info_response(download_bytes=0, seed_bytes=150)
         self.assertFalse(self.inhibitor.does_inhibit())

@@ -49,7 +49,7 @@ def get_value(key_path: list[str], default_val: Optional[str] = None) -> str:
             _log.info(f"Unable to find value for key: {'.'.join(key_path)}, using default value {default_val}")
             return str(default_val)
         raise ValueError("Unable to provide a value.  Key not found.")
-    found_val = val.get(key_path[-1])
+    found_val = val.get(key_path[-1], default_val)
     if type(found_val) in {int, float, str, bool}:
         return str(found_val)
     raise ValueError("Yaml schema contained dict or list where a scalar was expected. ")
@@ -57,13 +57,15 @@ def get_value(key_path: list[str], default_val: Optional[str] = None) -> str:
 def key_exists(key_path: list[str]) -> bool:
     if type(key_path) is not list:
         raise ValueError("key_path should be a list of path elements.")
+
     path = [*key_path] # defensive copy
     path.append(None) # sentential
     cur_val = _config_yml
     for element in path:
         if cur_val is None:
             return False
-        cur_val = cur_val.get(element)
+        if element is not None:
+            cur_val = cur_val.get(element)
     return True
 
 

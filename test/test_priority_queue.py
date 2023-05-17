@@ -11,7 +11,7 @@ class TestPriorityQueue(TestCase):
 
     def test_poll(self):
         pq = PriorityQueue([2,1])
-        self.assertEquals(1, pq.poll() )
+        self.assertEqual(1, pq.poll() )
 
     def test_poll_raises(self):
         pq = PriorityQueue()
@@ -20,7 +20,7 @@ class TestPriorityQueue(TestCase):
     def test_offer(self):
         pq = PriorityQueue([2])
         pq.offer(1)
-        self.assertEquals(1, pq.peek() )
+        self.assertEqual(1, pq.peek() )
 
     def test_peek_raises(self):
         pq = PriorityQueue()
@@ -32,11 +32,11 @@ class TestPriorityQueue(TestCase):
 
     def test_len(self):
         pq = PriorityQueue([1,2,3])
-        self.assertEquals(3, len(pq) )
+        self.assertEqual(3, len(pq) )
 
     def test_iter(self):
         pq = PriorityQueue([1,2,3])
         # note by definition an ordered sequence is a min heap
         # slightly fragile test assuming a valid heap input is not re-ordered on heapification
-        self.assertEquals([1,2,3], [*pq])
+        self.assertEqual([1,2,3], [*pq])
 
