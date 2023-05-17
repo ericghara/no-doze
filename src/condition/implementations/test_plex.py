@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import patch, Mock
 
 import src.config_provider as config_provider
-from src.trigger.implementations.plex import PlexInhibitor
+from src.condition.implementations.plex import PlexInhibitor
 
 
 class PlexTest(unittest.TestCase):
@@ -21,7 +21,7 @@ class PlexTest(unittest.TestCase):
         # This is the plex server constructed by PlexServer() constructor
         self.templateMock = Mock()
         # This patches the PlexServer import
-        self.plexPatch = patch("src.trigger.implementations.plex.PlexServer", return_value=self.templateMock)
+        self.plexPatch = patch("src.condition.implementations.plex.PlexServer", return_value=self.templateMock)
         self.plexServerMock = self.plexPatch.start()
 
         self.inhibitor = PlexInhibitor()

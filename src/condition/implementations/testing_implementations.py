@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import Optional
 
-from src.trigger.inhibiting_condition import InhibitingCondition
+from src.condition.inhibiting_condition import InhibitingCondition
 
 """
 These implementations are for testing.  They **do not** AutoRegister or pull properties from the config.yml.  

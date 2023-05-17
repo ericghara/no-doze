@@ -7,8 +7,9 @@ from typing import NamedTuple, Optional
 from qbittorrentapi import Client
 
 from src import config_provider
-from src.trigger.inhibiting_condition import InhibitingCondition
+from src.condition.inhibiting_condition import InhibitingCondition
 
+logging_level_key = "logging_level"
 config_root_key = "qbittorrent"
 username_key = "username"
 password_key = "password"
@@ -44,6 +45,9 @@ class QbittorrentInhibitor(InhibitingCondition):
 
         self._last_reading: TimeBytes = TimeBytes(time=datetime.now(),
                                                   bytes=sys.maxsize)  # sentinel, forces inhibition for first period
+
+        if config_provider.get_value([logging_level_key], "INFO") == "INFO":
+            logging.getLogger('urllib3').setLevel(logging.CRITICAL) # very chatty when unable to connect
 
     def _get_channel_key(self) -> str:
         if self._channel is self.Channel.SEEDING:
@@ -81,8 +85,7 @@ class QbittorrentInhibitor(InhibitingCondition):
         try:
             response = self._template.transfer_info()
         except Exception as e:
-            self._log.info("Suppressed an error from template, run with debug to get full stacktrace.")
-            self._log.debug(e)
+            self._log.debug("Suppressed an error while fetching transfer info", e)
             response = {}
         transferred = response.get(self._data_transferred_key, 0)
         return TimeBytes(time=datetime.now(), bytes=transferred)
@@ -107,5 +110,11 @@ class QbittorrentInhibitor(InhibitingCondition):
         return byte_delta / (seconds_elapsed * BYTES_PER_KB) >= self._min_speed_kbps
 
 def register(registrar: 'InhibitingProcessRegistrar'):
-    registrar.accept(QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.DOWNLOADING))
-    registrar.accept(QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.SEEDING))
+    if config_provider.key_exists(["qbittorrent","downloading"]):
+        registrar.accept(QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.DOWNLOADING))
+    else:
+        logging.debug("Skipping registration of 'qBittorrent - Downloading'. Configuration is absent from the config.yml.")
+    if config_provider.key_exists(["qbittorrent","seeding"]):
+        registrar.accept(QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.SEEDING))
+    else:
+        logging.debug("Skipping registration of 'qBittorrent - Seeding'. Configuration is absent from the config.yml.")

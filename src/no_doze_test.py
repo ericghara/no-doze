@@ -2,8 +2,8 @@ import unittest
 from datetime import timedelta, datetime
 from unittest.mock import patch, MagicMock
 
+from src.condition.implementations.testing_implementations import ProgrammableInhibitor
 from src.no_doze import NoDoze, ScheduledCheck
-from src.trigger.implementations.testing_implementations import ProgrammableInhibitor
 
 
 class NoDozeTest(unittest.TestCase):
@@ -22,7 +22,7 @@ class NoDozeTest(unittest.TestCase):
         unittest.mock.patch.stopall()
 
     def test_add_inhibitor_adds_to_inhibiting_processes(self):
-        self.assertEqual(self.no_doze.inhibiting_processes, [self.process_stub], "Inhibiting processes")
+        self.assertEqual(self.no_doze.inhibiting_processes, [self.process_stub], "Inhibiting conditions")
 
     def test_add_inhibitor_adds_to_schedule(self):
         self.assertEquals(1, len(self.no_doze._schedule), "length")

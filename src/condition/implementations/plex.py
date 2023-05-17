@@ -8,8 +8,9 @@ from plexapi.base import PlexSession
 from plexapi.server import PlexServer
 
 from src import config_provider
-from src.trigger.inhibiting_condition import InhibitingCondition
+from src.condition.inhibiting_condition import InhibitingCondition
 
+logging_level_key = "logging_level"
 config_root_key = "plex"
 token_key = "token"
 base_url_key = "base_url"
@@ -30,11 +31,26 @@ class PlexInhibitor(InhibitingCondition):
         super().__init__(name="Plex Playback", period=period)
         if period == sys.maxsize:
             self.log.info("Plex Inhibitor was disabled by config.")
-
-        self.template: Optional[PlexServer] = None # delay instantiation PlexServer attempts to create a connection immediately
+        # delay instantiation, PlexServer attempts to create a connection immediately
+        self.template: Optional[PlexServer] = None
 
         self.pause_timeout: timedelta = self._generate_pause_timeout()
         self.paused: Dict[str, datetime] = dict()
+
+        if config_provider.get_value([logging_level_key], "INFO") == "INFO":
+            logging.getLogger('urllib3').setLevel(logging.CRITICAL) # very chatty when unable to connect
+
+    def does_inhibit(self) -> bool:
+        currently_paused: List[PlexSession] = list()
+        inhibited = False
+        # check all sessions for activity
+        for session in self._fetch_sessions():
+            if session.player.state.lower() != "paused":
+                inhibited = True
+            else:
+                currently_paused.append(session)
+        inhibited |= self._update_paused(currently_paused)
+        return inhibited
 
     def _create_server_template(self) -> PlexServer:
         token = config_provider.get_value([config_root_key, token_key], "")
@@ -49,15 +65,15 @@ class PlexInhibitor(InhibitingCondition):
             return timedelta.max
         return pause_periods * self.period()
 
+
     def _fetch_sessions(self) -> List[PlexSession]:
-        if not self.template:
-            self.template = self._create_server_template()
         try:
+            if not self.template:
+                self.template = self._create_server_template()
             return self.template.sessions()
         except Exception as e:
             self.log.debug(f"Failed to fetch sessions from server.", e)
             return list()
-
 
     def _update_paused(self, currently_paused: List[PlexSession]) -> bool:
         """
@@ -80,18 +96,9 @@ class PlexInhibitor(InhibitingCondition):
         self.paused = next_paused
         return inhibited
 
-    def does_inhibit(self) -> bool:
-        currently_paused: List[PlexSession] = list()
-        inhibited = False
-        # check all sessions for activity
-        for session in self._fetch_sessions():
-            if session.player.state.lower() != "paused":
-                inhibited = True
-            else:
-                currently_paused.append(session)
-        inhibited |= self._update_paused(currently_paused)
-        return inhibited
-
 
 def register(registrar: 'InhibitingProcessRegistrar'):
-    registrar.accept(PlexInhibitor())
+    if config_provider.key_exists(["plex"]):
+        registrar.accept(PlexInhibitor())
+    else:
+        logging.debug("Skipping registration of Plex. Configuration is absent from config.yml.")

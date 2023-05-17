@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 from typing import *
 
 from src import config_provider
-from src.inhibiting_process_registrar import registrar
+from src.condition.inhibiting_condition import InhibitingCondition
+from src.inhibiting_condition_registrar import registrar
 from src.priority_queue import PriorityQueue
 from src.sleep_inhibitor import SleepInhibitor
-from src.trigger.inhibiting_condition import InhibitingCondition
 
 
 class ScheduledCheck(NamedTuple):
@@ -40,7 +40,7 @@ class NoDoze:
         if not self._sleep_inhibitor:
             raise ValueError("This was not properly opened.  Use in a with block.")
         if not self.inhibiting_processes:
-            raise ValueError("Cannot start without any inhibiting processes.  Check your configuration.")
+            raise ValueError("Cannot start without any inhibiting conditions.  Check your configuration.")
 
         while True:
             self._handle_period()
@@ -110,10 +110,10 @@ class NoDoze:
         """
         :param inhibitor:
         :return:
-        :raise: ValueError if the provided trigger was already registered
+        :raise: ValueError if the provided condition was already registered
         """
         if inhibitor in self.inhibiting_processes:
-            raise ValueError(f"The trigger: {inhibitor.name} is already registered.")
+            raise ValueError(f"The condition: {inhibitor.name} is already registered.")
         self.inhibiting_processes.append(inhibitor)
         self._schedule.offer(ScheduledCheck(time=datetime.now()+self._startup_delay_min, inhibiting_process=inhibitor))
 
@@ -128,7 +128,7 @@ class NoDoze:
             return True
 
     def _no_inhibit(self) -> bool:
-        self.log.debug(f"No Inhibiting processes.  Sleep allowed for next period.")
+        self.log.debug(f"No Inhibiting conditions.  Sleep allowed for next period.")
         if self._sleep_inhibitor.is_inhibiting():
             self.log.debug("Ending the inhibition currently in place. Returning a sleep inhibition lock.")
             self._sleep_inhibitor.allow_sleep()

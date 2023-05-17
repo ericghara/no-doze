@@ -1,6 +1,8 @@
 from abc import ABC
 from datetime import timedelta
 
+from src import config_provider
+
 
 class InhibitingCondition(ABC):
     """
@@ -74,4 +76,5 @@ def register(registrar: 'InhibitingProcessRegistrar') -> None:
 
     :param registrar: an InhibitingProcessRegistrar singleton
     """
-    registrar.accept(InhibitingCondition(name="Example", period=timedelta.max))
+    if config_provider.key_exists(["demo_inhibiting_condition"]):  # check if user has configured this condition
+        registrar.accept(InhibitingCondition(name="Example", period=timedelta.max))  # add condition to registrar
