@@ -1,0 +1,66 @@
+#!/bin/python3
+
+import glob
+import logging
+import os
+import subprocess
+
+INSTALL_DIR = "/opt/no-doze"
+SRC_DIR = "./src"
+VENV = INSTALL_DIR + "/venv"
+VENV_BIN = VENV + "/bin"
+
+logging.basicConfig(level=logging.INFO)
+
+def run_without_error(cmd: list[str], error_msg: str) -> str:
+    result = subprocess.run(cmd, text=True)
+    if result.returncode != 0:
+        if result.stderr:
+            logging.warning(result.stderr)
+        logging.warning(error_msg)
+        exit(1)
+    return result.stdout
+
+if os.getuid() != 0:
+    logging.warning("Install must be run as root.")
+    exit(1)
+
+## Prepare installation directory
+
+if not os.path.exists(SRC_DIR):
+    logging.warning(f"Could not find the sources directory: {SRC_DIR}")
+    exit(1)
+
+if os.path.exists(INSTALL_DIR) and os.listdir(INSTALL_DIR):
+    while (response := input(f"The directory {INSTALL_DIR} exists and is not empty, its contents will be deleted, would you like to continue installation? (y/n)").upper()) not in ("Y","N"):
+        continue
+    if response == "Y":
+        for file in glob.glob(INSTALL_DIR+"/*"):
+            run_without_error(cmd=["rm", "-r", file],
+                            error_msg=f"Encountered an error while deleting the contents of {file}")
+    else:
+        logging.info("Exiting.")
+        exit(0)
+elif not os.path.exists(INSTALL_DIR):
+    run_without_error(cmd=["mkdir", INSTALL_DIR], error_msg=f"Could not make dir {INSTALL_DIR}")
+
+run_without_error(cmd=["virtualenv", "-q", "-p", "/usr/bin/python3", VENV], error_msg="Unable to create the virtual environment.")
+run_without_error(cmd=[f"{VENV_BIN}/pip", "install", "-r", "requirements.txt"], error_msg="An error occurred while installing dependencies.")
+run_without_error(cmd=["cp", "-r", SRC_DIR, INSTALL_DIR], error_msg=f"Unable to transfer source files to {INSTALL_DIR}.")
+
+### Prepare systemd
+run_without_error(cmd=["cp", "no-doze.service", "/etc/systemd/system"], error_msg="Unable to transfer the systemd unit file.")
+run_without_error(cmd=["systemctl", "daemon-reload"], error_msg="Unable to reload daemons")
+
+while (response := input(f"Would you like NoDoze to autostart on boot (i.e. systemd enable)? (y/n)").upper()) not in ("Y", "N"):
+    continue
+if response == "Y":
+    run_without_error(cmd=["systemctl", "enable", "no-doze.service"], error_msg="Unable to enable the no-doze service.")
+else:
+    logging.info("Run 'systemd enable no-doze.service' whenever you'd like no-doze to autostart")
+
+logging.info(f"To configure no-doze check out {INSTALL_DIR+'/src/resources/config.yml'}" )
+logging.info("To start NoDoze run: 'systemctl start no-doze.service'")
+logging.info("To check the status of NoDoze, run: 'journalctl -u no-doze.service --follow'")
+logging.info("Installation completed successfully.")
+

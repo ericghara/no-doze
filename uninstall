@@ -1,0 +1,38 @@
+#!/bin/python3
+
+import logging
+import os.path
+import subprocess
+
+INSTALL_DIR = "/opt/no-doze"
+UNIT_FILE = "/etc/systemd/system/no-doze.service"
+
+logging.basicConfig(level=logging.INFO)
+
+def run_without_error(cmd: list[str], error_msg: str) -> str:
+    result = subprocess.run(cmd, text=True)
+    if result.returncode != 0:
+        if result.stderr:
+            logging.warning(result.stderr)
+        logging.warning(error_msg)
+        exit(1)
+    return result.stdout
+
+if os.getuid() != 0:
+    logging.warning("Uninstall must run as root.")
+    exit(1)
+
+
+if not os.path.exists(INSTALL_DIR):
+    logging.info(f"The directory {INSTALL_DIR} does not exist. Exiting.")
+    exit(1)
+
+# Install dir
+run_without_error(cmd=["rm", "-r", INSTALL_DIR], error_msg=f"Unable to delete {INSTALL_DIR}")
+# systemd
+subprocess.run(["systemctl", "stop", "no-doze.service"], text=True)
+run_without_error(cmd=["systemctl", "disable", "no-doze.service"], error_msg=f"Unable to disable the NoDoze service.")
+run_without_error(cmd=["rm", UNIT_FILE], error_msg=f"Unable to delete the unit file {UNIT_FILE}")
+run_without_error(cmd=["systemctl", "daemon-reload"], error_msg="Unable to reload systemd daemons.")
+
+logging.info("Uninstall completed successfully.")
