@@ -29,12 +29,12 @@ a lock. While the lock is held, NoDoze prevents sleep. Upon releasing the lock, 
 An up-to-date Linux system that uses systemd, and has [virtualenv](https://github.com/pypa/virtualenv) installed.  
 
 The install script will create a python virtual environment and pull the required python packages.
-If you do not want to use the installation script, no doze requires the following packages: 
+If you do not want to use the installation script, NoDoze requires the following packages: 
 
-| Required Python packages | Feature             |
-|--------------------------|---------------------|
-| PyYAML                   | Core                |
-| dbus-python              | Core                |
+| Required Python packages | Feature            |
+|--------------------------|--------------------|
+| PyYAML                   | Core               |
+| dbus-python              | Core               |
 | PlexAPI                  | Plex plugin        |
 | qbittorrent-api          | qBittorrent plugin |
 
@@ -83,4 +83,4 @@ poetry install
 ```
 If you do not wish to use poetry, a `requirements.txt` is provided.
 
-*Note:* Root privileges are required by any process which blocks sleep. Keep this in mind while hacking.
+*Note:* Root privileges are required by any process which blocks sleep. Keep this in mind while testing.
