@@ -6,8 +6,8 @@ from typing import NamedTuple, Optional
 
 from qbittorrentapi import Client
 
-from src import config_provider
-from src.condition.inhibiting_condition import InhibitingCondition
+from core import config_provider
+from core.inhibiting_condition import InhibitingCondition
 
 logging_level_key = "logging_level"
 config_root_key = "qbittorrent"
@@ -110,11 +110,11 @@ class QbittorrentInhibitor(InhibitingCondition):
         return byte_delta / (seconds_elapsed * BYTES_PER_KB) >= self._min_speed_kbps
 
 def register(registrar: 'InhibitingProcessRegistrar'):
-    if config_provider.key_exists(["qbittorrent","downloading"]):
+    if config_provider.key_exists(["qbittorrent", "downloading"]):
         registrar.accept(QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.DOWNLOADING))
     else:
         logging.debug("Skipping registration of 'qBittorrent - Downloading'. Configuration is absent from the config.yml.")
-    if config_provider.key_exists(["qbittorrent","seeding"]):
+    if config_provider.key_exists(["qbittorrent", "seeding"]):
         registrar.accept(QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.SEEDING))
     else:
         logging.debug("Skipping registration of 'qBittorrent - Seeding'. Configuration is absent from the config.yml.")

@@ -5,7 +5,7 @@ description = "\"Delays a Linux computer form sleeping while certain processes a
 authors = ["Your Name <you@example.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "src"}]
+packages = [{include = "condition"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"

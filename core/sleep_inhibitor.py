@@ -1,9 +1,8 @@
 import logging
+import os
 from typing import Optional
 
 import dbus
-import os
-
 from _dbus_bindings import UnixFd
 from dbus.proxies import ProxyObject, Interface
 

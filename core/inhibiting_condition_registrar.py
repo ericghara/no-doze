@@ -3,8 +3,8 @@ import logging
 import pkgutil
 from typing import Iterable
 
-import src.condition.implementations as implementations
-from src.condition.inhibiting_condition import InhibitingCondition
+import plugin
+from core.inhibiting_condition import InhibitingCondition
 
 
 class InhibitingConditionRegistrar:
@@ -31,7 +31,7 @@ class InhibitingConditionRegistrar:
 
     def scan(self) -> None:
         importlib.invalidate_caches()
-        for _finder, name, _ispkg in pkgutil.iter_modules(path=implementations.__path__, prefix=implementations.__name__+"."):
+        for _finder, name, _ispkg in pkgutil.iter_modules(path=plugin.__path__, prefix=plugin.__name__ + "."):
             module = importlib.import_module(name)
             if self._REGISTER_FUNCTION_NAME in dir(module):
                 self._log.info(f"Discovered Inhibiting Condition(s): {name}.  Attempting to register.")

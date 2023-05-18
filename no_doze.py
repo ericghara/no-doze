@@ -5,11 +5,11 @@ import time
 from datetime import datetime, timedelta
 from typing import *
 
-from src import config_provider
-from src.condition.inhibiting_condition import InhibitingCondition
-from src.inhibiting_condition_registrar import registrar
-from src.priority_queue import PriorityQueue
-from src.sleep_inhibitor import SleepInhibitor
+from core import config_provider
+from core.inhibiting_condition import InhibitingCondition
+from core.inhibiting_condition_registrar import registrar
+from core.priority_queue import PriorityQueue
+from core.sleep_inhibitor import SleepInhibitor
 
 
 class ScheduledCheck(NamedTuple):
@@ -110,10 +110,10 @@ class NoDoze:
         """
         :param inhibitor:
         :return:
-        :raise: ValueError if the provided condition was already registered
+        :raise: ValueError if the provided plugin was already registered
         """
         if inhibitor in self.inhibiting_processes:
-            raise ValueError(f"The condition: {inhibitor.name} is already registered.")
+            raise ValueError(f"The plugin: {inhibitor.name} is already registered.")
         self.inhibiting_processes.append(inhibitor)
         self._schedule.offer(ScheduledCheck(time=datetime.now()+self._startup_delay_min, inhibiting_process=inhibitor))
 
@@ -148,4 +148,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     print(os.path.abspath(__file__))
+    logging.basicConfig(level=config_provider.get_value(["logging_level"], "INFO"))
     main()

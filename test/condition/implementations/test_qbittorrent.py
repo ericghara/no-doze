@@ -3,8 +3,8 @@ from time import sleep
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from src import config_provider
-from src.condition.implementations.qbittorrent import QbittorrentInhibitor
+from core import config_provider
+from plugin.qbittorrent import QbittorrentInhibitor
 
 
 class TestQbittorrentInhibitorSingleChannel(TestCase):
@@ -21,7 +21,7 @@ class TestQbittorrentInhibitorSingleChannel(TestCase):
     def setUp(self) -> None:
         config_provider._load_string(self.single_channel_yml)
         self.template_mock = Mock()
-        self.qb_client_patch = patch("src.condition.implementations.qbittorrent.Client",
+        self.qb_client_patch = patch("plugin.qbittorrent.Client",
                                      return_value=self.template_mock).start()
         self.inhibitor = QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.DOWNLOADING)
 
@@ -122,7 +122,7 @@ class TestQbittorrentInhibitorSeedingChannel(TestCase):
     def setUp(self) -> None:
         config_provider._load_string(self.dual_channel_yml)
         self.template_mock = Mock()
-        self.qb_client_patch = patch("src.condition.implementations.qbittorrent.Client",
+        self.qb_client_patch = patch("plugin.qbittorrent.Client",
                                      return_value=self.template_mock).start()
         self.inhibitor = QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.SEEDING)
 

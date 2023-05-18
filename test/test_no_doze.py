@@ -2,9 +2,9 @@ import unittest
 from datetime import timedelta, datetime
 from unittest.mock import patch, MagicMock
 
-import src.config_provider as config_provider
-from src.condition.implementations.testing_implementations import ProgrammableInhibitor
-from src.no_doze import NoDoze, ScheduledCheck
+from core import config_provider as config_provider
+from no_doze import NoDoze, ScheduledCheck
+from plugin.testing_implementations import ProgrammableInhibitor
 
 
 class NoDozeTest(unittest.TestCase):
@@ -13,7 +13,7 @@ class NoDozeTest(unittest.TestCase):
         self.sleep_inhibitor_mock = MagicMock()
         self.sleep_inhibitor_mock.__enter__.return_value = self.sleep_inhibitor_mock
 
-        self.sleep_inhibitor_patch = patch('src.no_doze.SleepInhibitor', return_value=self.sleep_inhibitor_mock).start()
+        self.sleep_inhibitor_patch = patch('no_doze.SleepInhibitor', return_value=self.sleep_inhibitor_mock).start()
         config_provider._load_string("""
         startup_delay_min: 0
         logging_level: "DEBUG"
@@ -42,7 +42,7 @@ class NoDozeTest(unittest.TestCase):
         self.sleep_inhibitor_mock.__exit__.assert_called_once()
 
     def test_handle_scheduled_checks_does_not_poll_before_scheduled_time(self):
-        with patch('src.no_doze.datetime') as date_mock:
+        with patch('no_doze.datetime') as date_mock:
             date_mock.now.return_value = datetime.min
             self.no_doze._handle_scheduled_checks()
             self.assertFalse(self.process_stub.was_called())

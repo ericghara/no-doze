@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from src import config_provider
+from core import config_provider
 
 
 class TestConfigProvider(TestCase):
@@ -17,7 +17,7 @@ class TestConfigProvider(TestCase):
             key: "found"
         """
         config_provider._load_string(yml_str)
-        found = config_provider.get_value(["test","key"], "not_found")
+        found = config_provider.get_value(["test", "key"], "not_found")
         self.assertEqual("found", found)
 
     def test_get_value_parent_not_exists_key_not_exists_returns_default(self):
@@ -25,7 +25,7 @@ class TestConfigProvider(TestCase):
                 """
         expected = "default"
         config_provider._load_string(yml_str)
-        found = config_provider.get_value(["test","key"], expected)
+        found = config_provider.get_value(["test", "key"], expected)
         self.assertEqual(expected, found)
 
     def test_get_value_parent_exists_key_not_exists_return_default(self):
@@ -42,7 +42,7 @@ class TestConfigProvider(TestCase):
         yml_str = """
                 """
         config_provider._load_string(yml_str)
-        self.assertRaises(ValueError, lambda: config_provider.get_value(["test","key"]) )
+        self.assertRaises(ValueError, lambda: config_provider.get_value(["test", "key"]))
 
     def test_get_value_raises_when_value_non_scalar(self):
         yml_str = """
@@ -51,7 +51,7 @@ class TestConfigProvider(TestCase):
                 c: true
         """
         config_provider._load_string(yml_str)
-        self.assertRaises(ValueError, lambda: config_provider.get_value(["test","key"]))
+        self.assertRaises(ValueError, lambda: config_provider.get_value(["test", "key"]))
 
     def test_get_value_raises_when_key_path_is_not_list(self):
         self.assertRaises(ValueError, lambda: config_provider.get_value("abc"))
@@ -87,7 +87,7 @@ class TestConfigProvider(TestCase):
                         test:
                         """
         config_provider._load_string(yml_str)
-        self.assertEqual([1, 2, 3], config_provider.get_object(["test"], [1,2,3]))
+        self.assertEqual([1, 2, 3], config_provider.get_object(["test"], [1, 2, 3]))
 
     def test_get_object_raises_when_object_does_not_exist_and_not_default_provided(self):
         yml_str = """

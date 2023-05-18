@@ -2,8 +2,8 @@ import logging
 import subprocess
 from datetime import timedelta
 
-from src import config_provider
-from src.condition.inhibiting_condition import InhibitingCondition
+from core import config_provider
+from core.inhibiting_condition import InhibitingCondition
 
 config_root_key = "active-process"
 processes_key = "processes"

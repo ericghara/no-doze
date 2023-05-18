@@ -5,7 +5,7 @@ from typing import Optional, Dict, List
 
 import yaml
 
-_config_path = Path(__file__).parent / "resources/config.yml"
+_config_path = Path(__file__).parent / "../resources/config.yml"
 _config_yml: dict = {}
 
 _log = logging.getLogger("config_provider")
