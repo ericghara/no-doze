@@ -2,6 +2,7 @@ import unittest
 from datetime import timedelta, datetime
 from unittest.mock import patch, MagicMock
 
+import src.config_provider as config_provider
 from src.condition.implementations.testing_implementations import ProgrammableInhibitor
 from src.no_doze import NoDoze, ScheduledCheck
 
@@ -13,6 +14,10 @@ class NoDozeTest(unittest.TestCase):
         self.sleep_inhibitor_mock.__enter__.return_value = self.sleep_inhibitor_mock
 
         self.sleep_inhibitor_patch = patch('src.no_doze.SleepInhibitor', return_value=self.sleep_inhibitor_mock).start()
+        config_provider._load_string("""
+        startup_delay_min: 0
+        logging_level: "DEBUG"
+        """)
         self.no_doze = NoDoze()
         self.period = timedelta(seconds=0.030)  # 30 ms
         self.process_stub = ProgrammableInhibitor(period=self.period)
