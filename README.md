@@ -58,7 +58,7 @@ To make sure everything is running as expected:
 journalctl -u no-doze.service --follow
 ```
 
-If you configured NoDoze to autostart on boot during the installation, systemd will start NoDoze everytime your computer starts.
+If you configured NoDoze to autostart on boot during the installation, systemd will start NoDoze during boot.
 
 ## Troubleshooting
 Change the logging level from `INFO` to `DEBUG` in the `config.yml`.
