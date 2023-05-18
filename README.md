@@ -25,9 +25,9 @@ Implementors are directed to `src.condition.inhibiting_condition` for more detai
 
 ## System Requirements
 
-An up-to-date Linux system that uses systemd and [virtualenv](https://github.com/pypa/virtualenv).  The install script
-will create a python virtual environment and pull the required python packages.
+An up-to-date Linux system that uses systemd, and has [virtualenv](https://github.com/pypa/virtualenv) installed.  
 
+The install script  will create a python virtual environment and pull the required python packages.
 If you do not want to use the installation script, no doze requires the following packages: 
 
 | Required Python packages | Feature             |
@@ -58,7 +58,7 @@ To make sure everything is running as expected:
 journalctl -u no-doze.service --follow
 ```
 
-If you set NoDoze to autostart on boot during the installation, systemd will start NoDoze everytime your computer starts.
+If you configured NoDoze to autostart on boot during the installation, systemd will start NoDoze everytime your computer starts.
 
 ## Troubleshooting
 Change the logging level from `INFO` to `DEBUG` in the `config.yml`.
@@ -70,7 +70,7 @@ Then run:
 systemctl restart no-doze.service
 journalctl -u no-doze.service --follow
 ```
-Hopefully the more detailed log provides more information.
+Hopefully the more detailed log provides insight towards a solution.
 ## Developers
 
 Set up the poetry virtual environment.
