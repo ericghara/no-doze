@@ -1,10 +1,10 @@
 
 # to avoid issues with services which are late to come online during boot
-startup_delay_min: 0
+startup_delay_min: 0.2
 # options INFO or DEBUG
 logging_level: "INFO"
 
-# to disable, delete this section or set period_min to INF
+# to disable, delete this section
 plex:
     token: "A1A1A1A1A1A1A1A1A1A1"
     base_url: "http://localhost:32400"
@@ -13,17 +13,27 @@ plex:
     # set to INF to inhibit sleep indefinitely while playback is *paused*, set to 0 never inhibit sleep due to paused playback
     max_periods_paused: 3
 
+# delete this section to disable all
 qbittorrent:
     host_url: "http://localhost:8080"
     username: "admin" # empty for no username
     password: "123456789" # empty for no password
     # delete this section to disable inhibition on download
     downloading:
-        period_min: .133
+        period_min: 10
         min_speed_kbps: 10 # kilobytes
     # delete this section to disable inhibition on seeding
     seeding:
-        period_min: .133
+        period_min: 10
         min_speed_kbps: 25 # kilobytes
 
-
+# delete this section or leave processes blank to disable
+active-process:
+# List of process configurations here
+    processes:
+        - name: "make"
+          period_min: 10
+        - name: "apt"
+          period_min: 10
+        - name: "emerge"
+          period_min: 10

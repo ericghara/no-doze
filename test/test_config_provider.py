@@ -72,4 +72,35 @@ class TestConfigProvider(TestCase):
         config_provider._load_string(yml_str)
         self.assertTrue(config_provider.key_exists(["test", "key"]))
 
+    def test_get_object_when_object_does_exist(self):
+        yml_str = """
+                test:
+                    - 1
+                    - 2
+                    - 3 
+                """
+        config_provider._load_string(yml_str)
+        self.assertEqual([1,2,3], config_provider.get_object(["test"]))
+
+    def test_get_object_returns_default_when_object_does_not_exist(self):
+        yml_str = """
+                        test:
+                        """
+        config_provider._load_string(yml_str)
+        self.assertEqual([1, 2, 3], config_provider.get_object(["test"], [1,2,3]))
+
+    def test_get_object_raises_when_object_does_not_exist_and_not_default_provided(self):
+        yml_str = """
+                                test:
+                                """
+        config_provider._load_string(yml_str)
+        self.assertRaises(ValueError, lambda: config_provider.get_object(["test"]))
+
+    def test_get_object_raise_when_key_is_a_scalar(self):
+        yml_str = """
+                                        test: "is scalar"
+                                        """
+        config_provider._load_string(yml_str)
+        self.assertRaises(ValueError, lambda: config_provider.get_object(["test"]))
+
 

@@ -1,7 +1,7 @@
 import logging
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, List
 
 import yaml
 
@@ -54,12 +54,31 @@ def get_value(key_path: list[str], default_val: Optional[str] = None) -> str:
         return str(found_val)
     raise ValueError("Yaml schema contained dict or list where a scalar was expected. ")
 
+def get_object(key_path: list[str], default: Optional[List|Dict]=None) -> List|Dict:
+    if type(key_path) is not list:
+        raise ValueError("key_path should be a list of path elements.")
+    path = [*key_path] # defensive copy
+    path.append(None) # sentinel
+    cur_val = _config_yml
+    for element in path:
+        if cur_val is None:
+            cur_val = default
+            break
+        if type(cur_val) not in (list, dict):
+            _log.warning("Encountered a scalar value while traversing to key.  Check your config.yml.")
+            raise ValueError("YAML schema is incorrect.")
+        if element is not None:
+            cur_val = cur_val.get(element)
+    if cur_val is None:
+        raise ValueError(f"Unable to find a value for path {key_path}")
+    return cur_val
+
 def key_exists(key_path: list[str]) -> bool:
     if type(key_path) is not list:
         raise ValueError("key_path should be a list of path elements.")
 
     path = [*key_path] # defensive copy
-    path.append(None) # sentential
+    path.append(None) # sentinel
     cur_val = _config_yml
     for element in path:
         if cur_val is None:
