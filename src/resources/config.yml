@@ -2,7 +2,7 @@
 # to avoid issues with services which are late to come online during boot
 startup_delay_min: 0
 # options INFO or DEBUG
-logging_level: INFO
+logging_level: "INFO"
 
 # to disable, delete this section or set period_min to INF
 plex:
