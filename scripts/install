@@ -71,7 +71,7 @@ if response == "Y":
 else:
     log.info("Run 'systemd enable no-doze.service' whenever you'd like no-doze to autostart")
 # pro tips
-log.info(f"To configure no-doze check out {INSTALL_DIR+'/src/resources/config.yml'}" )
+log.info(f"To configure no-doze check out {INSTALL_DIR+'/resources/config.yml'}" )
 log.info("To start NoDoze run: 'systemctl start no-doze.service'")
 log.info("To check the status of NoDoze, run: 'journalctl -u no-doze.service --follow'")
 log.info("Installation completed successfully.")
