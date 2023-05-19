@@ -2,3 +2,4 @@ misc
 .idea
 *.pyc
 resources/your_config.yml
+dist
