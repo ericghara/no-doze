@@ -22,6 +22,10 @@ pause_periods_key = "max_periods_paused"
 class PlexInhibitor(InhibitingCondition):
 
     """
+    A sleep inhibitor that checks the status of active playback streams using the Plex API.  Any active streams have
+    the ability to inhibit sleep.  Paused streams are a special case, they can be configured to inhibit sleep for only
+    a few periods.  This is to handle cases where someone paused playback for a very long time.
+
     if no `period_min` key is found service is disabled, with the period being set to a very large value.
     """
 
@@ -97,7 +101,7 @@ class PlexInhibitor(InhibitingCondition):
         return inhibited
 
 
-def register(registrar: 'InhibitingProcessRegistrar'):
+def register(registrar: 'InhibtingConditionRegistrar'):
     if config_provider.key_exists(["plex"]):
         registrar.accept(PlexInhibitor())
     else:

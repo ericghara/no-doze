@@ -11,6 +11,9 @@ name_key = "name"
 period_min_key = "period_min"
 
 class ActiveProcessInhibitor(InhibitingCondition):
+    """
+    Inhibit sleep by monitoring actively running processes on the system.  Uses `ps` under the hood.
+    """
 
     def __init__(self, process_name: str, period: timedelta):
         name = f"{type(self).__name__} - {process_name}"
@@ -23,7 +26,12 @@ class ActiveProcessInhibitor(InhibitingCondition):
         result = subprocess.run(["ps", "h", "-C", self._process_name], capture_output=True, text=True)
         return result.returncode == 0
 
-def register(registrar: 'InhibitingProcessRegistrar') -> None:
+def register(registrar: 'InhibtingConditionRegistrar') -> None:
+    """
+    Able to register multiple processes in one call, depending on the `config.yml`
+    :param registrar:
+    :return:
+    """
     process_info = config_provider.get_object(key_path=[config_root_key, processes_key], default=list())
     for info in process_info:
         process_name = info.get(name_key)

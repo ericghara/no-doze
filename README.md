@@ -50,12 +50,12 @@ If you do not want to use the installation script, NoDoze requires the following
 
 ```bash
 git clone https://github.com/ericghara/no-doze.git
-cd no-doze
+cd no-doze/scripts
 sudo ./install
 ```
 
 The installation directory is `/opt/no-doze`. Before staring NoDoze take a look at the configuration in
-`/opt/no-doze/src/resources/config.yml`. Leave it as is or make changes according to your needs. When everything is
+`/opt/no-doze/resources/config.yml`. Leave it as is or make changes according to your needs. When everything is
 configured run:
 
 ```bash
@@ -68,7 +68,7 @@ To make sure everything is running as expected:
 journalctl -u no-doze.service --follow
 ```
 
-If you configured NoDoze to start on boot, you are all set. On future boot systemctl will start NoDoze. Otherwise,
+If you configured NoDoze to start on boot, you are all set; on future boots systemctl will start NoDoze. Otherwise,
 NoDoze
 can be started and stopped on demand like any other systemd service.
 
@@ -92,7 +92,7 @@ Hopefully the more detailed log provides insight towards a solution.
 ## Developers
 
 To make a plugin you need to implement a single method: `does_inhibit`, and make
-the plugin available for autodiscovery. The documentation in `src.condition.inhibiting_condition` should get you
+the plugin available for autodiscovery. The documentation in `core.inhibiting_condition` should get you
 started.
 
 To set up the Poetry virtual environment.

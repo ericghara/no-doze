@@ -26,7 +26,7 @@ _load_file()
 
 def get_value(key_path: list[str], default_val: Optional[str] = None) -> str:
     """
-    Retrieves values from the nested `config_yml` `dict`.  The optional default value is returned
+    Retrieves values from the `config_yml`.  The optional default value is returned
     if the key is not found.  If the query or yaml schema cause traversal though a scalar value,
     an error is thrown as this indicates not a missing key, but a misconfiguration.
     :param key_path: a series of key elements delimited by a `.`, *i.e.* `path.to.key`
@@ -55,6 +55,15 @@ def get_value(key_path: list[str], default_val: Optional[str] = None) -> str:
     raise ValueError("Yaml schema contained dict or list where a scalar was expected. ")
 
 def get_object(key_path: list[str], default: Optional[List|Dict]=None) -> List|Dict:
+    """
+    Gets a non-scalar value (list or dict) from the config.  A default may be provided, otherwise an error will be raised
+    if the key is not found.  If the found value is a scalar **or** while traversing to the value, traversal *through* a scaler
+    occurs an error is thrown (irrespective of if a default value was provided).  While slightly opinionated, traversing through
+    a scalar means that something is wrong with the YAML schema, so it's better to fail fast.
+    :param key_path: List[str] of path elements i.e. ["path","to","key"]
+    :param default: value to be returned if key is not found
+    :return:
+    """
     if type(key_path) is not list:
         raise ValueError("key_path should be a list of path elements.")
     path = [*key_path] # defensive copy
@@ -74,6 +83,11 @@ def get_object(key_path: list[str], default: Optional[List|Dict]=None) -> List|D
     return cur_val
 
 def key_exists(key_path: list[str]) -> bool:
+    """
+    Query if a key exists.
+    :param key_path: List[str] of path elements i.e. ["path","to","key"]
+    :return:
+    """
     if type(key_path) is not list:
         raise ValueError("key_path should be a list of path elements.")
 
@@ -90,9 +104,10 @@ def key_exists(key_path: list[str]) -> bool:
 
 def get_period_min(key_path: list[str], default: timedelta) -> timedelta:
     """
-    Parses a number (float or int) from the config file and returns it as a timedelta of minutes.
-    :param key_path:
-    :param default:
+    Parses a number (float or int) from the config file and returns it as a timedelta of minutes. Uses `get_value` under
+    the hood, so refer to documentation of that function for usage details.
+    :param key_path: List[str] of path elements i.e. ["path","to","key"]
+    :param default: a default timedelta to be returned in the case no key is found
     :return:
     """
     raw_min = float(get_value(key_path, None))

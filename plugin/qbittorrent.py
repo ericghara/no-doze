@@ -29,11 +29,29 @@ BYTES_PER_KB = 1024
 
 
 class QbittorrentInhibitor(InhibitingCondition):
+
+    """
+    An inhibitor that uses Web UI API's to inhibit sleep based on seeding or download rates. The Web UI *must* be
+    enabled in the qBittorrent configuration in order for this to work.
+
+    Rates are used instead of a simple check of active downloads/uploads because often torrents can be *essentially*
+    stuck making almost no progress in these cases some users may want sleep to occur.  Users who don't care about this
+    should set the transfer threshold to a very low number such as 0 or 1 kbps.
+
+    Keep in mind torrent transfer rates can fluctuate significantly, so it's not a good idea to pick very short periods,
+    i.e. 1 minute.  The transfer rate used to determine if sleep should be inhibited is the simple average transfer rate
+    over the period.
+    """
     class Channel(Enum):
         SEEDING = "seeding"
         DOWNLOADING = "downloading"
 
     def __init__(self, channel: Channel):
+        """
+        Can be configured to monitor download or seeding rates.  To monitor both, two separate QbittorrentInhibitors
+        should be constructed.
+        :param channel: a `Channel` enum
+        """
         self._channel: QbittorrentInhibitor.Channel = channel
         name = f"{type(self).__name__} - {channel.value}"
         super().__init__(name=name, period=self._get_period())
@@ -109,7 +127,12 @@ class QbittorrentInhibitor(InhibitingCondition):
             raise ValueError("Time between readings was <= 0")
         return byte_delta / (seconds_elapsed * BYTES_PER_KB) >= self._min_speed_kbps
 
-def register(registrar: 'InhibitingProcessRegistrar'):
+def register(registrar: 'InhibtingConditionRegistrar'):
+    """
+    Registers properly configured `QbittorrentInhibitors`.  May register multiple `QbittorrentInhibitors`.
+    :param registrar:
+    :return:
+    """
     if config_provider.key_exists(["qbittorrent", "downloading"]):
         registrar.accept(QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.DOWNLOADING))
     else:

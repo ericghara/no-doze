@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock
 
 from core import config_provider as config_provider
 from no_doze import NoDoze, ScheduledCheck
-from plugin.testing_implementations import ProgrammableInhibitor
+from test.plugin.test_condtions import ProgrammableInhibitor
 
 
 class NoDozeTest(unittest.TestCase):

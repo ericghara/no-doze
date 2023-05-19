@@ -3,7 +3,7 @@ Description=Prevent system from sleeping under certain conditions
 
 [Service]
 WorkingDirectory=/opt/no-doze
-ExecStart=/opt/no-doze/venv/bin/python3 -m src.no_doze
+ExecStart=/opt/no-doze/venv/bin/python3 no_doze.py
 
 Restart=always
 RestartSec=10

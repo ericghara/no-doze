@@ -4,6 +4,10 @@ from typing import TypeVar, Optional, List, Iterator, Generic
 T = TypeVar('T')
 class PriorityQueue(Generic[T]):
 
+    """
+    A basic priority queue.
+    """
+
     def __init__(self, items: Optional[List[T]] = None):
         self._minHeap: List[T] = items if items else list()
         heapq.heapify(self._minHeap)

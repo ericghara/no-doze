@@ -12,7 +12,7 @@ class FileDescriptorLock:
     """
     An abstraction around a FileDescriptor lock.  Extreme care should be made to ensure that FileDescriptorLocks
     are eventually closed even in during failure modes of a program.  Explicit `take` and `release` methods are provided
-    as well as support for with statements which allow holding the lock for the duration of the with block.
+    as well as support for `with` statements which allow holding the lock for the duration of the with block.
     """
 
     def __init__(self, descriptor_obj: UnixFd):
@@ -46,11 +46,14 @@ class FileDescriptorLock:
 class SleepInhibitor:
 
     """
-    To Better understand this class it is useful to refer to the `systemd-inhibit` man page as well as the
-    [systemd-logind Manager Object](https://www.freedesktop.org/software/systemd/man/org.freedesktop.login1.html)
-    documentation.
+    An API that allows blocking of system sleep.  **Must** be run with root privileges.  Blocking may be indefinite,
+    and can only be overridden by a process or user with root privileges.
 
     In order to ensure orderly freeing of system resources this should be only used in a with statement.
+
+    It is useful to refer to the `systemd-inhibit` man page as well as the
+    [systemd-logind Manager Object](https://www.freedesktop.org/software/systemd/man/org.freedesktop.login1.html)
+    documentation to better understand how login1 handles sleep.
     """
 
     _LOGIND_BUS_NAME = 'org.freedesktop.login1'
@@ -76,6 +79,10 @@ class SleepInhibitor:
 
 
     def inhibit_sleep(self) -> bool:
+        """
+        Inhibit sleep until `allow_sleep` is called.
+        :return: True if a new lock was taken (i.e. sleep was not already being inhibited), False if no new lock was taken.
+        """
         if not self._login_manager_interface:
             raise ValueError("No D-Bus connection is active. This resource must be opened in a 'with' block.")
         if self._sleep_lock:
@@ -87,6 +94,11 @@ class SleepInhibitor:
         return True
 
     def allow_sleep(self) -> bool:
+        """
+        Allow the system to sleep.
+        :return: True if a lock was released (i.e. sleep was already being inhibited), False if sleep was not being
+        inhibited (requiring no action to be taken).
+        """
         if not self._sleep_lock:
             self._log.warning("Received a call to allow sleep when no sleep inhibition is in place.")
             return False

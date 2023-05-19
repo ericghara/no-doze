@@ -1,6 +1,5 @@
 import datetime
 import logging
-import os
 import time
 from datetime import datetime, timedelta
 from typing import *
@@ -115,7 +114,8 @@ class NoDoze:
         if inhibitor in self.inhibiting_processes:
             raise ValueError(f"The plugin: {inhibitor.name} is already registered.")
         self.inhibiting_processes.append(inhibitor)
-        self._schedule.offer(ScheduledCheck(time=datetime.now()+self._startup_delay_min, inhibiting_process=inhibitor))
+        self._schedule.offer(
+            ScheduledCheck(time=datetime.now() + self._startup_delay_min, inhibiting_process=inhibitor))
 
     def _inhibit(self) -> bool:
         self.log.debug(f"Inhibition required for the next period.")
@@ -145,8 +145,9 @@ def main() -> None:
             no_doze.add_inhibitor(inhibiting_process)
         no_doze.run()
 
+_LOGGING_LEVEL_KEY = "logging_level"
 
 if __name__ == "__main__":
-    print(os.path.abspath(__file__))
-    logging.basicConfig(level=config_provider.get_value(["logging_level"], "INFO"))
+    logging.basicConfig(level=config_provider.get_value([_LOGGING_LEVEL_KEY], "INFO"))
+    logging.debug(f"Starting up in: {__file__}")
     main()
