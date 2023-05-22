@@ -1,4 +1,4 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from datetime import timedelta
 
 from core import config_provider
@@ -43,6 +43,7 @@ class InhibitingCondition(ABC):
             raise ValueError("Period must be positive.")
         self._period: timedelta = period
 
+    @abstractmethod
     def does_inhibit(self) -> bool:
         """
         Reports to NoDoze that sleep should be inhibited.  Called once per period.  If `True` is returned it is guaranteed
