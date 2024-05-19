@@ -48,3 +48,10 @@ active-process:
           period_min: 10
         - name: "emerge"
           period_min: 10
+
+# Suspend Sleep when sshd is running
+# remove or comment out this key to disable
+sshd:
+    # period between checks of the process and how long sleep should be inhibited after a positive check
+    period_min: 10
+    max_periods: 144 # 1440 min (1 day)
