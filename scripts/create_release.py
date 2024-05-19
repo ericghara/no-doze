@@ -5,7 +5,6 @@ import tempfile
 import os
 import os.path
 import subprocess
-from typing import *
 
 LOG_LEVEL = "INFO"
 
