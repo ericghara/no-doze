@@ -17,6 +17,7 @@ These plugins have been implemented:
   completes, sleep is allowed to resume.
 * **qBittorrent Downloading**: While download rate remains above a certain threshold, sleep is prevented.
 * **qBittorrent Seeding**: While upload rate remains above a certain threshold, sleep is prevented.
+* **SSH Client Connected**: While user(s) are currently logged in by SSH sleep is prevented.
 
 ## How It works
 
