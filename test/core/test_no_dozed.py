@@ -7,7 +7,7 @@ import core.server.no_dozed
 from core.server.no_dozed import Server, FIFO_PREFIX
 
 
-class MyTestCase(unittest.TestCase):
+class TestNoDozeD(unittest.TestCase):
 
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory(prefix="no_doze_test_")
