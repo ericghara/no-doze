@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from core import config_provider
+from common import config_provider
 
 
 class TestConfigProvider(TestCase):

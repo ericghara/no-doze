@@ -3,7 +3,7 @@ from time import sleep
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from core import config_provider
+from common import config_provider
 from plugin.qbittorrent import QbittorrentInhibitor
 
 

@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from core.priority_queue import PriorityQueue
+from common.priority_queue import PriorityQueue
 
 
 class TestPriorityQueue(TestCase):

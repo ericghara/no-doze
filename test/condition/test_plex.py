@@ -3,7 +3,7 @@ import unittest
 from datetime import timedelta
 from unittest.mock import patch, Mock
 
-from core import config_provider as config_provider
+from common import config_provider as config_provider
 from plugin.plex import PlexInhibitor
 
 

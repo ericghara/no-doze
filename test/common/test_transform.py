@@ -1,7 +1,7 @@
 import unittest
 
-import core.common.message.messages as messages
-from core.common.message.transform import MessageEncoder, MessageDecoder
+import common.message.messages as messages
+from common.message.transform import MessageEncoder, MessageDecoder
 from datetime import datetime
 import json
 

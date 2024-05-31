@@ -1,11 +1,10 @@
 import logging
 import subprocess
 import re
-import datetime
-from datetime import datetime, timedelta
+from datetime import timedelta
 
-from core import config_provider
-from core.inhibiting_condition import InhibitingCondition
+from common import config_provider
+from client.inhibiting_condition import InhibitingCondition
 
 config_root_key = "sshd"
 period_key = "period_min"

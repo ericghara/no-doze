@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import timedelta
 
-from core import config_provider
+from common import config_provider
 
 
 class InhibitingCondition(ABC):

@@ -4,11 +4,11 @@ import time
 from datetime import datetime, timedelta
 from typing import *
 
-from core import config_provider
-from core.inhibiting_condition import InhibitingCondition
-from core.inhibiting_condition_registrar import registrar
-from core.priority_queue import PriorityQueue
-from core.sleep_inhibitor import SleepInhibitor
+from common import config_provider
+from client.inhibiting_condition import InhibitingCondition
+from client.inhibiting_condition_registrar import registrar
+from common.priority_queue import PriorityQueue
+from server.sleep_inhibitor import SleepInhibitor
 
 
 class ScheduledCheck(NamedTuple):

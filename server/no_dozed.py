@@ -11,15 +11,15 @@ import signal
 import glob
 import re
 import subprocess
-from core.common.message.transform import MessageDecoder
-from core.common.message.messages import InhibitMessage, BindMessage
-from core.sleep_inhibitor import SleepInhibitor
+from common.message.transform import MessageDecoder
+from common.message.messages import InhibitMessage, BindMessage
+from server.sleep_inhibitor import SleepInhibitor
 
 
 class Server:
 
-    DEFAULT_BASE_DIR = path.relpath("../../")
-    DEFAULT_PERMISSIONS = 0o666
+    DEFAULT_BASE_DIR = path.relpath("../")
+    DEFAULT_FIFO_PERMISSIONS = 0o666
     DEFAULT_POLL_INTERVAL = timedelta(seconds=10)
 
     FIFO_BUFFER_B = 4096  # linux default
@@ -32,7 +32,7 @@ class Server:
     MODE = "block"  # "delay" | "block"
 
     def __init__(self, base_dir: str = DEFAULT_BASE_DIR, poll_interval: timedelta = DEFAULT_POLL_INTERVAL,
-                 permissions: int = DEFAULT_PERMISSIONS):
+                 permissions: int = DEFAULT_FIFO_PERMISSIONS):
         self._log = logging.getLogger(type(self).__name__)
         self._base_dir = base_dir
         self._fifo_path = path.join(base_dir, f"{self.FIFO_PREFIX}{os.getpid()}")
@@ -65,6 +65,7 @@ class Server:
 
         if self._sleep_inhibitor:
             self._sleep_inhibitor.__exit__(exc_type=exc_type, exc_val=exc_val, exc_tb=exc_tb)
+
         self._sleep_inhibitor = None
         self._bound_client = None
         self._inhibit_until = datetime.now()
@@ -78,16 +79,21 @@ class Server:
         return f
 
     def _clear_stale_fifos(self) -> None:
+        """
+        Deletes old FIFOs and takes some effort to check if another server instance is actively running.  This is a
+        *best effort* attempt and is prone to race conditions.
+        :return:
+        """
         matcher = re.compile(self.FIFO_PREFIX+r"(\d+)")
         for maybe_fifo in glob.glob(root_dir=self._base_dir, pathname=f"{self.FIFO_PREFIX}*"):
             match = matcher.match(maybe_fifo)
             if match:
                 pid = match[1]
                 found = subprocess.run(["ps", "p", pid, "o", "cmd", "h"], capture_output=True, text=True)
-                if (found.returncode != 0 or
+                if (found.returncode != 0 or pid == os.getpid() or
                         (found.returncode == 0 and not found.stdout.endswith(os.path.basename(__file__)))):
-                    # between restarts cannot rely on PID, so checking to make sure PID isn't associated with another
-                    # server
+                    # Between restarts cannot rely on PID, so need to check if PID is actually associated with another
+                    # server.  Need to handle edge case where a stale FIFO happens to have same PID as current process.
                     stale_fifo_path = os.path.join(self._base_dir, maybe_fifo)
                     self._log.info(f"Deleting stale FIFO: {stale_fifo_path}")
                     os.unlink(stale_fifo_path)
@@ -105,11 +111,11 @@ class Server:
                               f"Already bound to: {self._bound_client}")
             try:
                 self._log.info(f"Sending unbind signal to: {msg.pid}")
+                # Send client a (POSIX) signal to unbind.  Eventually it should give up, or potentially
+                # user started a new client in preparation to restart this server.
                 os.kill(msg.pid, self.UNBIND_SIGNAL)
             except ProcessLookupError as e:
                 self._log.warning(f"Unable to send unbind message to: {msg.pid}.  Process went down?")
-
-
 
     def _handle_inhibit(self, msg: InhibitMessage) -> None:
         if msg.pid != self._bound_client:
@@ -125,8 +131,9 @@ class Server:
     def _receive_messages(self) -> None:
         while raw_message := self._fifo.readline():
             if len(raw_message) >= self.FIFO_BUFFER_B:
+                # fifos have atomic writes up to buffer size (never have atomic reads)
                 self._log.warning("Message too long.  Writes not guaranteed atomic.")
-            message_json = raw_message.decode()
+            message_json = raw_message.decode().rstrip('\n')
             message = None
             try:
                 message = json.loads(message_json, cls=MessageDecoder)
@@ -145,8 +152,7 @@ class Server:
                 self._log.warning("Error while handling a message.", exc_info=e)
                 self._log.info(f"Failing message: {message_json}")
 
-
-    def set_inhibitor(self, do_inhibit: bool)-> bool:
+    def set_inhibitor(self, do_inhibit: bool) -> bool:
         changed = do_inhibit != self._sleep_inhibitor.is_inhibiting()
         if not changed:
             self._log.debug(f"No change to sleep state required. Inhibiting Sleep: {do_inhibit}.")
@@ -175,4 +181,5 @@ class Server:
 
 if __name__ == "__main__":
     # set-up some args
+    # set-up signal handler for graceful shutdown
     pass

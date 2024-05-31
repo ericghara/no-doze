@@ -1,9 +1,9 @@
 import json
 from datetime import datetime
-from typing import Callable, Any
+from typing import Any
 from typing import Dict
 
-import core.common.message.messages as messages
+import common.message.messages as messages
 class MessageEncoder(json.JSONEncoder):
 
     def default(self, obj):

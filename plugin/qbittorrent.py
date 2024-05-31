@@ -6,8 +6,8 @@ from typing import NamedTuple, Optional
 
 from qbittorrentapi import Client
 
-from core import config_provider
-from core.inhibiting_condition import InhibitingCondition
+from common import config_provider
+from client.inhibiting_condition import InhibitingCondition
 
 logging_level_key = "logging_level"
 config_root_key = "qbittorrent"
