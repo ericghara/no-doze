@@ -8,7 +8,7 @@ from common.message.transform import MessageEncoder
 from datetime import datetime, timedelta
 import time
 
-from server.no_dozed import Server
+from no_dozed import Server
 from typing import Any
 
 

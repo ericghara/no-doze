@@ -49,9 +49,9 @@ def register(registrar: 'InhibtingConditionRegistrar') -> None:
         logging.debug("Skipping registration of sshd inhibitor. Configuration is absent.")
         return
 
-    period_min_str = config_provider.get_value(key_path=[config_root_key, period_key], default_val="5")
+    period_min_str = config_provider.get_value(key_path=[config_root_key, period_key], default="5")
     max_periods_str = config_provider.get_value(key_path=[config_root_key, max_periods_key],
-                                                default_val="2147483647")
+                                                default="2147483647")
     try:
         period_min = float(period_min_str)
     except Exception:

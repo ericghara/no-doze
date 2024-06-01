@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import *
 
 from common import config_provider
+from common.config_provider import CastFn
 from client.inhibiting_condition import InhibitingCondition
 from client.inhibiting_condition_registrar import registrar
 from common.priority_queue import PriorityQueue
@@ -17,6 +18,16 @@ import signal
 import os.path as path
 import os
 import re
+import argparse
+
+# yaml config keys
+CLIENT_ROOT_KEY = "general"
+LOGGING_LEVEL_KEY = "logging_level"
+BASE_DIR_KEY = "base_dir"
+MAX_RECONNECTIONS_KEY = "max_reconnections"
+RETRY_DELAY_KEY = "retry_delay_sec"
+STARTUP_DELAY_KEY = "startup_delay_min"
+
 
 class ScheduledCheck(NamedTuple):
     time: datetime
@@ -28,15 +39,16 @@ class ScheduledCheck(NamedTuple):
 
 class NoDozeClient:
 
-    DEFAULT_BASE_DIR = path.relpath("../")
-    DEFAULT_CONNECTION_ATTEMPTS = 0
+    DEFAULT_BASE_DIR = path.relpath("./")
+    DEFAULT_CONNECTION_ATTEMPTS = 3
+    DEFAULT_STARTUP_DELAY = timedelta()
     FIFO_PREFIX = "FIFO_"
-    FIFO_REATTEMPT_DELAY = timedelta(seconds=1)
+    RETRY_DELAY = timedelta(seconds=1)
     UNBIND_SIGNAL = signal.SIGUSR1
 
     def __init__(self, base_dir: path=DEFAULT_BASE_DIR, startup_delay: timedelta=timedelta(),
                  max_reconnections: int = DEFAULT_CONNECTION_ATTEMPTS,
-                 reattempt_delay: timedelta=FIFO_REATTEMPT_DELAY):
+                 retry_delay: timedelta=RETRY_DELAY):
         self._log = logging.getLogger(type(self).__name__)
         self._inhibiting_processes = list()
         self._schedule: Optional[PriorityQueue[ScheduledCheck]] = PriorityQueue()
@@ -47,7 +59,7 @@ class NoDozeClient:
         self._connection_attempt = 0
         self._inhibit_until = datetime.now()
         self._max_reconnections = max_reconnections
-        self._reattempt_delay = reattempt_delay
+        self._retry_delay = retry_delay
         self._run = True
 
     def send_message(self, obj: Any) -> int:
@@ -80,8 +92,8 @@ class NoDozeClient:
             if num_fifo != 1:
                 found_fifo = None
                 self._log.info(f"Detected {num_fifo} connection candidates.  Waiting for: 1.")
-                self._log.info(f"Reattempting in {self._reattempt_delay}")
-                time.sleep(self._reattempt_delay.total_seconds())
+                self._log.info(f"Reattempting in {self._retry_delay}")
+                time.sleep(self._retry_delay.total_seconds())
 
         self._log.debug(f"Candidate for FIFO connection identified: {found_fifo}")
         return path.join(self._base_dir, found_fifo)
@@ -96,8 +108,8 @@ class NoDozeClient:
                 return
 
             if self._connection_attempt != 1:
-                self._log.info(f"Waiting {self._reattempt_delay} before reconnecting.")
-                time.sleep(self._reattempt_delay.total_seconds())
+                self._log.info(f"Waiting {self._retry_delay} before reconnecting.")
+                time.sleep(self._retry_delay.total_seconds())
 
             fifo_path = self._identify_fifo()
             try:
@@ -185,7 +197,7 @@ class NoDozeClient:
             if self._fifo is None:
                 self.open_fifo()
                 # give client a chance to reply to bind message (via a signal)
-                time.sleep(self._reattempt_delay.total_seconds())
+                time.sleep(self._retry_delay.total_seconds())
                 continue
             self._handle_period()
             if self._inhibit_until > datetime.now():
@@ -201,7 +213,7 @@ class NoDozeClient:
         self._run = False
 
 
-    def __enter__(self) -> 'Server':
+    def __enter__(self) -> 'NoDozeClient':
         # currently a no op
         return self
 
@@ -210,16 +222,36 @@ class NoDozeClient:
 
 
 def main() -> None:
+    base_dir = config_provider.get_value([CLIENT_ROOT_KEY, BASE_DIR_KEY], "./")
+    max_reconnections = config_provider.get_value([CLIENT_ROOT_KEY, MAX_RECONNECTIONS_KEY],
+                                                     cast_fn=CastFn.to_int,
+                                                     default=NoDozeClient.DEFAULT_CONNECTION_ATTEMPTS)
+    retry_delay = config_provider.get_value([CLIENT_ROOT_KEY, RETRY_DELAY_KEY],
+                                               cast_fn=CastFn.to_timedelta_sec,
+                                               default=NoDozeClient.RETRY_DELAY)
+    startup_delay = config_provider.get_value([CLIENT_ROOT_KEY, STARTUP_DELAY_KEY],
+                                                 cast_fn=CastFn.to_timedelta_min,
+                                                 default=NoDozeClient.DEFAULT_STARTUP_DELAY)
     registrar.scan()
-    with NoDozeClient() as client:
-        # todo setup config provider
+    #todo change plugin paths
+    with NoDozeClient(base_dir=base_dir, max_reconnections=max_reconnections, retry_delay=retry_delay,
+                      startup_delay=startup_delay) as client:
         signal.signal(handler=lambda sig, frame: client.close_fifo(), signalnum=NoDozeClient.UNBIND_SIGNAL)
         for inhibiting_process in registrar:
             client.add_inhibitor(inhibiting_process)
         client.run()
 
 if __name__ == "__main__":
-    logging.basicConfig(level="INFO")
+    parser = argparse.ArgumentParser(
+        prog="no_doze_client",
+        description="Inhibit sleep based on plugins.  Communicates with no_doze_d.",
+    )
+    parser.add_argument('c', '--config', type=str, help="path to config file",
+                        default="./resources/client_config.yml")
+    args = parser.parse_args()
+
+    config_provider.load_file(args.config)
+    logging.basicConfig(level=config_provider.get_value([CLIENT_ROOT_KEY, LOGGING_LEVEL_KEY], "INFO"))
     main()
 
 

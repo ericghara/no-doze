@@ -18,7 +18,7 @@ from server.sleep_inhibitor import SleepInhibitor
 
 class Server:
 
-    DEFAULT_BASE_DIR = path.relpath("../")
+    DEFAULT_BASE_DIR = path.relpath("/")
     DEFAULT_FIFO_PERMISSIONS = 0o666
     DEFAULT_POLL_INTERVAL = timedelta(seconds=10)
 

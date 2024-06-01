@@ -1,13 +1,10 @@
-import threading
 import unittest
 import tempfile
-from client.no_doze_client import NoDozeClient
+from no_doze_client import NoDozeClient
 import os.path as path
 import os
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
 import time
-import signal
 import json
 from common.message.transform import MessageDecoder
 from common.message.messages import BindMessage, InhibitMessage
@@ -34,7 +31,7 @@ class TestNoDozeClient(unittest.TestCase):
         self.dir_name = self.dir.name
         self.inhibitor = MockInhibitor()
         self.client = NoDozeClient(base_dir=self.dir_name, max_reconnections=self.MAX_RECONNECTIONS,
-                                   reattempt_delay=self.REATTEMPT_DELAY)
+                                   retry_delay=self.REATTEMPT_DELAY)
         self.client.add_inhibitor(self.inhibitor)
         self.pool = ThreadPoolExecutor(2)
 
