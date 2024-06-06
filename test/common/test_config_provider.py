@@ -1,6 +1,7 @@
 from unittest import TestCase
 
 from common import config_provider
+from common.config_provider import CastFn
 
 
 class TestConfigProvider(TestCase):
@@ -54,7 +55,19 @@ class TestConfigProvider(TestCase):
         self.assertRaises(ValueError, lambda: config_provider.get_value(["test", "key"]))
 
     def test_get_value_raises_when_key_path_is_not_list(self):
-        self.assertRaises(ValueError, lambda: config_provider.get_value("abc"))
+        self.assertRaises(ValueError, lambda: config_provider.get_value(["abc"]))
+
+    def test_get_value_casts_when_key_exists(self):
+        expected = 3.0
+        yaml_str = """
+        a: "3"
+        """
+        config_provider._load_string(yml_str=yaml_str)
+        self.assertEqual(expected, config_provider.get_value(["a"],cast_fn=CastFn.to_float))
+
+    def test_get_value_returns_default_when_key_not_exists(self):
+        expected = 3.0
+        self.assertEqual(expected, config_provider.get_value(["a"], cast_fn=CastFn.to_float, default=3.0))
 
     def test_key_exists_key_does_not_exist(self):
         yml_str = """

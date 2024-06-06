@@ -1,0 +1,5 @@
+logging_level: "INFO"
+base_dir: "./"
+poll_interval_min: 1
+fifo_permissions: "660"
+

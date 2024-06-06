@@ -1,3 +1,4 @@
+import argparse
 import logging
 import os
 import os.path
@@ -14,7 +15,18 @@ import subprocess
 from common.message.transform import MessageDecoder
 from common.message.messages import InhibitMessage, BindMessage
 from server.sleep_inhibitor import SleepInhibitor
+import common.config_provider as config_provider
+from common.config_provider import CastFn
+import argparse
 
+# YAML config keys
+LOGGING_LEVEL_KEY = "logging_level"
+BASE_DIR_KEY = "base_dir"
+POLL_INTERVAL_KEY = "poll_interval_min"
+FIFO_PERMISSIONS_KEY = "fifo_permissions"
+
+# Global defaults
+DEFAULT_CONFIG_PATH = "./resources/daemon_config.yml"
 
 class Server:
 
@@ -38,7 +50,7 @@ class Server:
         self._fifo_path = path.join(base_dir, f"{self.FIFO_PREFIX}{os.getpid()}")
         self._poll_interval = poll_interval
         self._permissions = permissions
-        self._fifo : Optional[IO] = None
+        self._fifo: Optional[IO] = None
         self._bound_client = None # pid of connected client
         self._inhibit_until = datetime.now()
         self._sleep_inhibitor: Optional[SleepInhibitor] = None
@@ -178,8 +190,28 @@ class Server:
     def inhibited(self) -> bool:
         return self._inhibit_until > datetime.now()
 
+def main() -> None:
+    base_dir = config_provider.get_value([BASE_DIR_KEY], "./")
+    poll_interval = config_provider.get_value([POLL_INTERVAL_KEY], default=timedelta(minutes=1),
+                                              cast_fn=CastFn.to_timedelta_min)
+    permissions = config_provider.get_value([FIFO_PERMISSIONS_KEY], default="660",
+                                                 cast_fn=CastFn.to_ocatl_int)
+    with Server(base_dir=base_dir, poll_interval=poll_interval, permissions=permissions) as server:
+        server.run()
 
 if __name__ == "__main__":
-    # set-up some args
+    parser = argparse.ArgumentParser(
+        prog="no_dozed",
+        description="Sleep inhibition-as-a-service"
+    )
+    parser.add_argument('-c', '--config', type=str, help="path to config file",
+                        default=DEFAULT_CONFIG_PATH)
+    args = parser.parse_args()
+
+    config_provider.load_file(args.config)
+    logging.basicConfig(level=config_provider.get_value([LOGGING_LEVEL_KEY], "INFO"))
+    main()
+
     # set-up signal handler for graceful shutdown
+    # todo switch to blocking read of FIFO?, drop poll interval?
     pass

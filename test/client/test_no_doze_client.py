@@ -11,6 +11,7 @@ from common.message.messages import BindMessage, InhibitMessage
 from datetime import datetime, timedelta
 from client.inhibiting_condition import InhibitingCondition
 from typing import *
+import logging
 
 class MockInhibitor(InhibitingCondition):
 
@@ -27,6 +28,7 @@ class TestNoDozeClient(unittest.TestCase):
     MAX_RECONNECTIONS = 3
 
     def setUp(self) -> None:
+        logging.basicConfig(level="DEBUG")
         self.dir = tempfile.TemporaryDirectory(prefix="no_doze_test_")
         self.dir_name = self.dir.name
         self.inhibitor = MockInhibitor()
@@ -113,6 +115,55 @@ class TestNoDozeClient(unittest.TestCase):
             self.assertTrue(isinstance(obj, BindMessage))
             self.client.close_fifo()
         f.result(timeout=0.050)
+
+    def test_client_calls_at_inhibitor_around_scheduled_time(self):
+        self.inhibitor.inhibit = True
+        fifo = self.makeFifo(1)
+        f = self.pool.submit(self.client.run)
+        self.readFifo(fifo) # ignore bind message
+        stop = datetime.now() + timedelta(milliseconds=100)
+        # inhibitor timedelta set to 10 ms
+        acc = timedelta()
+        cnt = 10
+        last = datetime.now()
+        for _ in range(10):
+            cur = json.loads(self.readFifo(fifo), cls=MessageDecoder).expiry_timestamp
+            acc += cur - last
+            last = cur
+        self.assertTrue(self.inhibitor.period()*0.9 <= acc/cnt <= self.inhibitor.period()*1.1,
+                        "Average period")
+        self.client.stop()
+        f.result(timeout=0.050)
+
+    def test_client_multiple_inhibitors_sends_later_inhibit_time(self):
+        long_inhibitor = MockInhibitor(period=timedelta(milliseconds=50), inhibit=True)
+        self.inhibitor.inhibit = True # short inhibitor
+        self.client.add_inhibitor(long_inhibitor)
+        fifo = self.makeFifo(1)
+        f = self.pool.submit(self.client.run)
+        self.readFifo(fifo) # ignore bind message
+        start = datetime.now()
+        stop = json.loads(self.readFifo(fifo), cls=MessageDecoder).expiry_timestamp
+        self.client.stop()
+        self.assertTrue(timedelta(milliseconds=40) < stop-start < timedelta(milliseconds=65))
+        f.result(timeout=0.100)
+
+    def test_client_no_message_when_already_inhibiting(self):
+        long_inhibitor = MockInhibitor(period=timedelta(milliseconds=50), inhibit=True)
+        self.client.add_inhibitor(long_inhibitor)
+        fifo = self.makeFifo(1)
+        self.client._log.info(datetime.now())
+        f = self.pool.submit(self.client.run)
+        self.readFifo(fifo)  # ignore bind message
+        self.assertIsNotNone(self.readFifo(fifo, timedelta(milliseconds=20)))
+        self.inhibitor.inhibit = True  # short inhibitor
+        self.assertIsNone(self.readFifo(fifo, timedelta(milliseconds=20)))
+        self.client.stop()
+        f.result(timeout=0.100)
+
+
+
+
 
 
 if __name__ == '__main__':

@@ -20,13 +20,16 @@ import os
 import re
 import argparse
 
-# yaml config keys
+# YAML config keys
 CLIENT_ROOT_KEY = "general"
 LOGGING_LEVEL_KEY = "logging_level"
 BASE_DIR_KEY = "base_dir"
 MAX_RECONNECTIONS_KEY = "max_reconnections"
 RETRY_DELAY_KEY = "retry_delay_sec"
 STARTUP_DELAY_KEY = "startup_delay_min"
+
+# Global defaults
+DEFAULT_CONFIG_PATH = "./resources/client_config.yml"
 
 
 class ScheduledCheck(NamedTuple):
@@ -146,12 +149,14 @@ class NoDozeClient:
         self._schedule.offer(
             ScheduledCheck(time=datetime.now() + self._startup_delay, inhibiting_process=inhibitor))
 
-    def _handle_scheduled_checks(self) -> None:
+    def _handle_scheduled_checks(self) -> bool:
         """
         Runs scheduled checks and updates the schedule with checks to be run in the future.
         *Note:* length of the schedule changes consistent between periods.  Every scheduled check that is
         removed is updated and reinserted at a future time in the schedule.
+        :return: if a new period of sleep should be started or an existing period should be extended
         """
+        sleep_increased = False
         while datetime.now() >= self._schedule.peek().time:
             last_scheduled_time, inhibiting_process = self._schedule.poll()
             scheduled_time = last_scheduled_time + inhibiting_process.period()
@@ -163,31 +168,22 @@ class NoDozeClient:
             if inhibiting_process.does_inhibit():
                 if scheduled_time > self._inhibit_until:
                     self._inhibit_until = scheduled_time
+                    sleep_increased = True
                     self._log.debug(
                         f"Process: {inhibiting_process} requires a new inhibition or extension of the current inhibition until: {scheduled_time}.")
                 else:
                     self._log.debug(
                         f"Inhibition already satisfied: Process: {inhibiting_process} requires inhibition until {scheduled_time}.")
             self._schedule.offer(ScheduledCheck(time=scheduled_time, inhibiting_process=inhibiting_process))
+        return sleep_increased
 
     def _calc_sec_until(self, until: datetime) -> float:
         now = datetime.now()
         sec = (until - now).total_seconds()
         if (sec < 0):
-            self._log.debug(f"Caught a negative sleep duration: {sec}")
+            self._log.debug(f"Caught a negative sleep duration: {sec}. Startup?")
             return 0
         return sec
-
-    def _handle_period(self) -> None:
-        """
-        Updates state of `SleepInhibitor` if necessary
-
-        *note* this was separated from `run` to facilitate testing.
-        """
-        next_check: datetime = self._schedule.peek().time
-        sleep_duration_sec = self._calc_sec_until(next_check)
-        time.sleep(sleep_duration_sec)
-        self._handle_scheduled_checks()
 
     def run(self) -> None:
         if not self._inhibiting_processes:
@@ -199,11 +195,13 @@ class NoDozeClient:
                 # give client a chance to reply to bind message (via a signal)
                 time.sleep(self._retry_delay.total_seconds())
                 continue
-            self._handle_period()
-            if self._inhibit_until > datetime.now():
+
+            if self._handle_scheduled_checks():
                 self.send_message(InhibitMessage(pid=os.getgid(), gid=os.getgid(),
                                                  expiry_timestamp=self._inhibit_until))
-
+            next_check: datetime = self._schedule.peek().time
+            sleep_duration_sec = self._calc_sec_until(next_check)
+            time.sleep(sleep_duration_sec)
 
     def stop(self):
         """
@@ -233,7 +231,6 @@ def main() -> None:
                                                  cast_fn=CastFn.to_timedelta_min,
                                                  default=NoDozeClient.DEFAULT_STARTUP_DELAY)
     registrar.scan()
-    #todo change plugin paths
     with NoDozeClient(base_dir=base_dir, max_reconnections=max_reconnections, retry_delay=retry_delay,
                       startup_delay=startup_delay) as client:
         signal.signal(handler=lambda sig, frame: client.close_fifo(), signalnum=NoDozeClient.UNBIND_SIGNAL)
@@ -246,8 +243,8 @@ if __name__ == "__main__":
         prog="no_doze_client",
         description="Inhibit sleep based on plugins.  Communicates with no_doze_d.",
     )
-    parser.add_argument('c', '--config', type=str, help="path to config file",
-                        default="./resources/client_config.yml")
+    parser.add_argument('-c', '--config', type=str, help="path to config file",
+                        default=DEFAULT_CONFIG_PATH)
     args = parser.parse_args()
 
     config_provider.load_file(args.config)

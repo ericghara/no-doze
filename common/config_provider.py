@@ -11,6 +11,8 @@ _config_yml: dict = {}
 _log = logging.getLogger("config_provider")
 
 def load_file(path: [str|Path]) -> None:
+    if type(path) is not Path:
+        path = Path(path)
     global _config_yml, _config_path
     _config_path = path
     with _config_path.open() as f:
@@ -34,6 +36,7 @@ def get_value(key_path: list[str], default: Optional[Any] = None, cast_fn: Calla
     :raise: ValueError if provided path would cause traversal through a scalar value or
     if the path does not exist in the dictionary and not default was provided.
     """
+    # todo this has turned into a mess
     if type(key_path) is not list:
         raise ValueError("key_path should be a list of path elements.")
 
@@ -48,10 +51,12 @@ def get_value(key_path: list[str], default: Optional[Any] = None, cast_fn: Calla
     if val is None:
         if default is not None:
             _log.info(f"Unable to find value for key: {'.'.join(key_path)}, using default value {default}")
-            return str(default)
+            return default
         raise ValueError("Unable to provide a value.  Key not found.")
 
-    found_val = val.get(key_path[-1], default)
+    found_val = val.get(key_path[-1])
+    if found_val is None:
+        return default
     if type(found_val) in {int, float, str, bool}:
         try:
             return cast_fn(found_val)
@@ -140,3 +145,8 @@ class CastFn:
     @staticmethod
     def to_timedelta_sec(val_str: str) -> timedelta:
         return timedelta(seconds=CastFn.to_float(val_str))
+
+    @staticmethod
+    def to_ocatl_int(val_str: str) -> int:
+        return int(val_str, 8)
+

@@ -11,7 +11,7 @@ from common import config_provider
 from client.inhibiting_condition import InhibitingCondition
 
 logging_level_key = "logging_level"
-config_root_key = "plex"
+config_root_path = ("plugins", "plex")
 token_key = "token"
 base_url_key = "base_url"
 period_key = "period_min"
@@ -31,7 +31,7 @@ class PlexInhibitor(InhibitingCondition):
 
     def __init__(self):
         self.log = logging.getLogger(type(self).__name__)
-        period = config_provider.get_period_min(key_path=[config_root_key, period_key], default=timedelta.max)
+        period = config_provider.get_period_min(key_path=[*config_root_path, period_key], default=timedelta.max)
         super().__init__(name="Plex Playback", period=period)
         if period == sys.maxsize:
             self.log.info("Plex Inhibitor was disabled by config.")
@@ -57,14 +57,14 @@ class PlexInhibitor(InhibitingCondition):
         return inhibited
 
     def _create_server_template(self) -> PlexServer:
-        token = config_provider.get_value([config_root_key, token_key], "")
-        base_url = config_provider.get_value([config_root_key, base_url_key], "")
+        token = config_provider.get_value([*config_root_path, token_key], "")
+        base_url = config_provider.get_value([*config_root_path, base_url_key], "")
         if not token or not base_url:
             raise ValueError("Problem parsing server info from config file.")
         return PlexServer(baseurl=base_url, token=token)
 
     def _generate_pause_timeout(self) -> timedelta:
-        pause_periods = round(float(config_provider.get_value([config_root_key, pause_periods_key])), 0)
+        pause_periods = round(float(config_provider.get_value([*config_root_path, pause_periods_key])), 0)
         if pause_periods == inf:
             return timedelta.max
         return pause_periods * self.period()
@@ -102,7 +102,7 @@ class PlexInhibitor(InhibitingCondition):
 
 
 def register(registrar: 'InhibtingConditionRegistrar'):
-    if config_provider.key_exists(["plex"]):
+    if config_provider.key_exists([*config_root_path]):
         registrar.accept(PlexInhibitor())
     else:
         logging.debug("Skipping registration of Plex. Configuration is absent from config.yml.")

@@ -10,7 +10,7 @@ from common import config_provider
 from client.inhibiting_condition import InhibitingCondition
 
 logging_level_key = "logging_level"
-config_root_key = "qbittorrent"
+config_root_path = ("plugins", "qbittorrent")
 username_key = "username"
 password_key = "password"
 host_key = "host_url"
@@ -80,23 +80,23 @@ class QbittorrentInhibitor(InhibitingCondition):
         If no key found effectively disables by setting period to 'sys.maxvalue'
         :return:
         """
-        return config_provider.get_period_min(key_path=[config_root_key, self._get_channel_key(), period_min_key], default=timedelta.max)
+        return config_provider.get_period_min(key_path=[*config_root_path, self._get_channel_key(), period_min_key], default=timedelta.max)
 
     def _get_min_speed_kbps(self) -> float:
         """
         If no key found effectively disables by setting max speed to `inf`
         :return:
         """
-        raw_val = config_provider.get_value([config_root_key, self._get_channel_key(), speed_key], 'inf')
+        raw_val = config_provider.get_value([*config_root_path, self._get_channel_key(), speed_key], 'inf')
         return float(raw_val)
 
     def _get_data_transferred_key(self) -> str:
         return 'dl_info_data' if self._channel is QbittorrentInhibitor.Channel.DOWNLOADING else "up_info_data"
 
     def _create_client_template(self) -> Client:
-        host_url = config_provider.get_value([config_root_key, host_key])
-        username = config_provider.get_value([config_root_key, username_key], "")
-        password = config_provider.get_value([config_root_key, username_key], "")
+        host_url = config_provider.get_value([*config_root_path, host_key])
+        username = config_provider.get_value([*config_root_path, username_key], "")
+        password = config_provider.get_value([*config_root_path, username_key], "")
         return Client(host=host_url, username=username, password=password)
 
     def _fetch_reading(self) -> TimeBytes:
@@ -133,7 +133,7 @@ def register(registrar: 'InhibtingConditionRegistrar'):
     :param registrar:
     :return:
     """
-    if config_provider.key_exists(["qbittorrent", "downloading"]):
+    if config_provider.key_exists([*config_root_path, "downloading"]):
         registrar.accept(QbittorrentInhibitor(channel=QbittorrentInhibitor.Channel.DOWNLOADING))
     else:
         logging.debug("Skipping registration of 'qBittorrent - Downloading'. Configuration is absent from the config.yml.")

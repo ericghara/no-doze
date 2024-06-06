@@ -5,7 +5,7 @@ from datetime import timedelta
 from common import config_provider
 from client.inhibiting_condition import InhibitingCondition
 
-config_root_key = "active-process"
+config_root_path = ("plugins", "active-process")
 processes_key = "processes"
 name_key = "name"
 period_min_key = "period_min"
@@ -32,7 +32,7 @@ def register(registrar: 'InhibtingConditionRegistrar') -> None:
     :param registrar:
     :return:
     """
-    process_info = config_provider.get_object(key_path=[config_root_key, processes_key], default=list())
+    process_info = config_provider.get_object(key_path=[*config_root_path, processes_key], default=list())
     for info in process_info:
         process_name = info.get(name_key)
         if type(process_name) is not str:
