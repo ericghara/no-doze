@@ -31,6 +31,7 @@ class FileDescriptorLock:
             except Exception as e:
                 self._log.warning(f"Unable to close the file descriptor: {self._open_descriptor}.", e)
 
+
     def __enter__(self) -> 'FileDescriptorLock':
         if self._open_descriptor is not None:
             self._log.warning("The descriptor has already been taken.  Do not reuse this object.")

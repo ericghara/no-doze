@@ -94,7 +94,7 @@ class NoDozeClient:
                     self._log.debug(f"Discovered FIFO {found_fifo}")
             if num_fifo != 1:
                 found_fifo = None
-                self._log.info(f"Detected {num_fifo} connection candidates.  Waiting for: 1.")
+                self._log.info(f"Detected {num_fifo} connection candidates.  Waiting for one.")
                 self._log.info(f"Reattempting in {self._retry_delay}")
                 time.sleep(self._retry_delay.total_seconds())
 

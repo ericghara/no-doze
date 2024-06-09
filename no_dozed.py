@@ -1,4 +1,3 @@
-import argparse
 import logging
 import os
 import os.path
@@ -28,6 +27,8 @@ FIFO_PERMISSIONS_KEY = "fifo_permissions"
 # Global defaults
 DEFAULT_CONFIG_PATH = "./resources/daemon_config.yml"
 
+
+
 class Server:
 
     DEFAULT_BASE_DIR = path.relpath("/")
@@ -52,8 +53,7 @@ class Server:
         self._permissions = permissions
         self._fifo: Optional[IO] = None
         self._bound_client = None # pid of connected client
-        self._inhibit_until = datetime.now()
-        self._sleep_inhibitor: Optional[SleepInhibitor] = None
+
 
     def __enter__(self) -> 'Server':
         self._fifo = self._open()
@@ -74,6 +74,10 @@ class Server:
             os.unlink(self._fifo_path)
         except Exception as e:
             self._log.warning(f"Unable to delete fifo {self._fifo_path or '[Unknown]'}", exc_info=e)
+
+        if self._timer:
+            self._timer.cancel()
+            self._timer = None
 
         if self._sleep_inhibitor:
             self._sleep_inhibitor.__exit__(exc_type=exc_type, exc_val=exc_val, exc_tb=exc_tb)
@@ -164,16 +168,7 @@ class Server:
                 self._log.warning("Error while handling a message.", exc_info=e)
                 self._log.info(f"Failing message: {message_json}")
 
-    def set_inhibitor(self, do_inhibit: bool) -> bool:
-        changed = do_inhibit != self._sleep_inhibitor.is_inhibiting()
-        if not changed:
-            self._log.debug(f"No change to sleep state required. Inhibiting Sleep: {do_inhibit}.")
-        elif do_inhibit:
-            self._log.debug(f"Beginning sleep inhibition.")
-            self._sleep_inhibitor.inhibit_sleep()
-        else:
-            self._log.debug(f"Ending sleep inhibition")
-        return changed
+
 
     def run(self) -> None:
         while True:
