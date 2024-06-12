@@ -42,8 +42,6 @@ class Server:
 
     WHO = "No-Doze Service"
     WHY = "A monitored process/event is in progress."
-    WHAT = "sleep"
-    MODE = "block"  # "delay" | "block"
 
     def __init__(self, base_dir: str = DEFAULT_BASE_DIR,
                  permissions: int = DEFAULT_FIFO_PERMISSIONS):
