@@ -197,7 +197,7 @@ class NoDozeClient:
                 continue
 
             if self._handle_scheduled_checks():
-                self.send_message(InhibitMessage(pid=os.getgid(), gid=os.getgid(),
+                self.send_message(InhibitMessage(pid=os.getpid(), gid=os.getgid(),
                                                  expiry_timestamp=self._inhibit_until))
             next_check: datetime = self._schedule.peek().time
             sleep_duration_sec = self._calc_sec_until(next_check)
@@ -205,7 +205,7 @@ class NoDozeClient:
 
     def stop(self):
         """
-        This wille eventually cause run to exit, the next time it wakes up from sleep.  Intended to be thread safe.
+        This will eventually cause run to exit, the next time it wakes up from sleep.  Intended to be thread safe.
         :return:
         """
         self._run = False

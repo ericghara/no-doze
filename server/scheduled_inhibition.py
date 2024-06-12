@@ -27,6 +27,12 @@ class ScheduledInhibition:
         :param until: time to sleep until
         :return: True if a new inhibition started or an existing period was extended else False
         """
+
+        # avoid taking the lock if we can (logic repeated in critical section as well)
+        if max(datetime.now(), self._inhibit_until) >= until:
+            self._log.debug(f"Ignoring an inhibition.  Already scheduled to inhibit to a >= time.")
+            return False
+
         with self._schedule_lock:
             if not all([self._inhibit_until, self._sleep_inhibitor, self._timer]):
                 # At shutdown these could be None due to race between timer thread and main thread.
@@ -68,6 +74,9 @@ class ScheduledInhibition:
                 return False
             self._sleep_inhibitor.allow_sleep()
             return True
+
+    def inhibit_until(self) -> datetime:
+        return self._inhibit_until
 
     def __enter__(self) -> 'ScheduledInhibition':
         self._inhibit_until = datetime.now()
