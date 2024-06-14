@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import logging
 import os
 import os.path
@@ -26,7 +28,7 @@ BASE_DIR_KEY = "base_dir"
 FIFO_PERMISSIONS_KEY = "fifo_permissions"
 
 # Global defaults
-DEFAULT_CONFIG_PATH = "./resources/daemon_config.yml"
+DEFAULT_CONFIG_PATH = "resources/no-dozed.yml"
 
 
 
@@ -236,5 +238,8 @@ if __name__ == "__main__":
 
     config_provider.load_file(args.config)
     logging.basicConfig(level=config_provider.get_value([LOGGING_LEVEL_KEY], "INFO"))
+    if os.getuid() != 0:
+        logging.warning("no_dozed should be run as root a user.  Feel free to have a look around, but this won't "
+                        "be able to inhibit sleep.")
     main()
 

@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import datetime
 import logging
 import time
@@ -9,7 +11,6 @@ from common.config_provider import CastFn
 from client.inhibiting_condition import InhibitingCondition
 from client.inhibiting_condition_registrar import registrar
 from common.priority_queue import PriorityQueue
-from server.sleep_inhibitor import SleepInhibitor
 import json
 from common.message.transform import MessageEncoder
 from common.message.messages import BindMessage, InhibitMessage
@@ -29,7 +30,7 @@ RETRY_DELAY_KEY = "retry_delay_sec"
 STARTUP_DELAY_KEY = "startup_delay_min"
 
 # Global defaults
-DEFAULT_CONFIG_PATH = "./resources/client_config.yml"
+DEFAULT_CONFIG_PATH = "resources/no-doze-client.yml"
 
 
 class ScheduledCheck(NamedTuple):
@@ -246,9 +247,10 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--config', type=str, help="path to config file",
                         default=DEFAULT_CONFIG_PATH)
     args = parser.parse_args()
-
     config_provider.load_file(args.config)
     logging.basicConfig(level=config_provider.get_value([CLIENT_ROOT_KEY, LOGGING_LEVEL_KEY], "INFO"))
+    if os.getuid() == 0:
+        logging.info("no_doze_client does not need to be run as root. Consider reconfiguring.")
     main()
 
 

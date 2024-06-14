@@ -31,8 +31,8 @@ if not os.path.exists(INSTALL_DIR):
 # Install dir
 run_without_error(cmd=["rm", "-r", INSTALL_DIR], error_msg=f"Unable to delete {INSTALL_DIR}")
 # systemd
-subprocess.run(["systemctl", "stop", "no-doze.service"], text=True)
-run_without_error(cmd=["systemctl", "disable", "no-doze.service"], error_msg=f"Unable to disable the NoDoze service.")
+subprocess.run(["systemctl", "stop", "no-dozed.service"], text=True)
+run_without_error(cmd=["systemctl", "disable", "no-dozed.service"], error_msg=f"Unable to disable the NoDoze service.")
 run_without_error(cmd=["rm", UNIT_FILE], error_msg=f"Unable to delete the unit file {UNIT_FILE}")
 run_without_error(cmd=["systemctl", "daemon-reload"], error_msg="Unable to reload systemd daemons.")
 

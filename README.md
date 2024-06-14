@@ -60,13 +60,13 @@ The installation directory is `/opt/no-doze`. Before staring NoDoze take a look 
 configured run:
 
 ```bash
-systemctl start no-doze.service
+systemctl start no-dozed.service
 ```
 
 To make sure everything is running as expected:
 
 ```bash
-journalctl -u no-doze.service --follow
+journalctl -u no-dozed.service --follow
 ```
 
 If you configured NoDoze to start on boot, you are all set; on future boots systemctl will start NoDoze. Otherwise,
@@ -84,8 +84,8 @@ logging_level: "DEBUG"
 Then run:
 
 ```bash
-systemctl restart no-doze.service
-journalctl -u no-doze.service --follow
+systemctl restart no-dozed.service
+journalctl -u no-dozed.service --follow
 ```
 
 Hopefully the more detailed log provides insight towards a solution.

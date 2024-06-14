@@ -1,19 +1,143 @@
 #!/bin/python3
 
-import glob
 import logging
 import os
 import subprocess
+from typing import *
+import shutil
 
 PROJECT_NAME = "no-doze"
 PROJECT_ROOT = os.path.abspath("..")
+DAEMON_DIR = "/usr/lib/no-doze"
 SCRIPTS_DIR = f"{PROJECT_ROOT}/scripts"
 INSTALL_DIR = f"/opt/{PROJECT_NAME}"
 VENV = INSTALL_DIR + "/venv"
-VENV_BIN = VENV + "/bin"
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("no-doze:installer")
+
+
+class Directory(NamedTuple):
+    destination: str
+    mode: int
+
+
+class File(NamedTuple):
+    destination: str
+    mode: int
+    source: str
+
+
+core = [
+    # dirs
+    Directory(destination="/etc/no-doze", mode=0o755),
+    Directory(destination=f"{DAEMON_DIR}", mode=0o755),
+    Directory(destination=f"{DAEMON_DIR}/plugin", mode=0o755),
+    Directory(destination=f"{DAEMON_DIR}/bin", mode=0o755),
+    # plugins
+    File(source=f"{PROJECT_ROOT}/plugin/active_process.py", destination=f"{DAEMON_DIR}/plugin/active_process.py", mode=0o644),
+    File(source=f"{PROJECT_ROOT}/plugin/plex.py", destination=f"{DAEMON_DIR}/plugin/plex.py", mode=0o644),
+    File(source=f"{PROJECT_ROOT}/plugin/qbittorrent.py", destination=f"{DAEMON_DIR}/plugin/qbittorrent.py", mode=0o644),
+    File(source=f"{PROJECT_ROOT}/plugin/sshd.py", destination=f"{DAEMON_DIR}/plugin/sshd.py", mode=0o644),
+    # executables
+    File(source=f"{PROJECT_ROOT}/scripts/uninstall", destination="/usr/lib/bin", mode=0o744),
+    File(source=f"{PROJECT_ROOT}/no_dozed.py", destination="/usr/bin/no_dozed.py", mode=0o744),
+    # systemd
+    File(source=f"{PROJECT_ROOT}/scripts/no-dozed.service", destination="/etc/systemd/system/no-dozed.service", mode=0o644),
+    File(source=f"{PROJECT_ROOT}/scripts/no-doze-client.service", destination="/etc/systemd/user/no-doze-client.service",
+         mode=0o644)
+]
+
+daemon_config = File(source=f"{PROJECT_ROOT}/resources/no-dozed.yml", destination="/etc/no-doze/no-dozed.yml", mode=0o644)
+
+client_shared = [
+    Directory(destination=".config/no-doze", mode=0o755),
+]
+
+client_config = File(source=f"{PROJECT_ROOT}/resources/no-doze-client.yml", destination=".config/no-doze/no-doze-client.yml", mode=0o644)
+
+def set_permissions(path: str, uid: int, gid: int, mode: int) -> None:
+    log.debug(f"Setting {uid}:{gid}\t{oct(mode)}\t{path}.")
+    try:
+        os.chown(path=path, uid=uid, gid=gid)
+        os.chmod(path=path, mode=mode) # just in case already existed
+    except Exception as e:
+        log.warning(f"Unable to set permissions/owner of {path}.")
+        raise e
+
+def create_directory(path: str, uid: int=0, gid: int=0, mode: int=0o755) -> None:
+    if os.path.exists(path):
+        if os.path.isdir(path):
+            log.info(f"Reusing existing directory: {path}.")
+        else:
+            log.warning(f"A non-directory exists where a directory should be made: {path}.")
+            raise FileExistsError("Another file is conflicting with creation of a directory.")
+    else:
+        try:
+            log.info(f"Creating directory {path}.")
+            os.mkdir(path=path, mode=mode)
+        except Exception as e:
+            log.warning(f"Unable to create directory: {path}.")
+            raise e
+    set_permissions(path=path, uid=uid, gid=gid, mode=mode)
+
+
+def copy_file(src_path: str, dest_path: str, uid: int=0, gid: int=0, mode: int=0o644,
+              force: bool=True) -> bool:
+    """
+    :param src_path:
+    :param dest_path: if destination is the new directory for the file, it must include a trailing space
+    :param uid:
+    :param gid:
+    :param mode:
+    :return:
+    """
+    src_path = os.path.abspath(src_path)
+    dest_path = os.path.abspath(dest_path)
+    if not os.path.exists(src_path) and os.path.isfile(src_path):
+        raise ValueError(f"Source does not exist: {src_path}")
+    if os.path.exists(dest_path):
+        if not os.path.isfile(dest_path):
+            log.warning(f"A non file object is conflicting with a file copy: {dest_path}.")
+            raise FileExistsError("There is a conflict, expected a file but found something else.")
+        else:
+            if force:
+                log.info(f"Overwriting file: {dest_path}.")
+            else:
+                log.info(f"File exists: {dest_path}.")
+                return False
+    try:
+        log.info(f"Copying file to: {dest_path}.")
+        shutil.copyfile(src_path, dest_path)
+    except Exception as e:
+        log.warning(f"Unable to copy file to: {dest_path}")
+        raise e
+    set_permissions(path=dest_path, uid=uid, gid=gid, mode=mode)
+
+def process_dir_file_list(dir_file_list: List[Directory|File], uid:int=0, gid:int=0, dest_dir: str="") -> None:
+    for o in dir_file_list:
+        destination = os.path.join(dest_dir, o.destination)
+        match(o):
+            case Directory():
+                create_directory(path=destination, mode=o.mode, uid=uid, gid=gid)
+            case File():
+                copy_file(src_path=o.source, dest_path=destination, mode=o.mode, uid=uid, gid=gid)
+            case _:
+                raise RuntimeError(f"Unexpected type: {type(o)}.")
+
+def ask_until_answered(question: str, accepted:List[str], ignore_case:bool=True) -> str:
+    if ignore_case:
+        accepted = [w.lower() for w in accepted]
+    last = None
+    while not last:
+        last = input(question).strip()
+        if ignore_case:
+            last = last.lower()
+        if last not in accepted:
+            print(f"Please select from: {accepted}.")
+            last = None
+    return last
+
 
 def run_without_error(cmd: list[str], error_msg: str) -> str:
     result = subprocess.run(cmd, text=True)
@@ -24,55 +148,87 @@ def run_without_error(cmd: list[str], error_msg: str) -> str:
         exit(1)
     return result.stdout
 
+
 if os.getuid() != 0:
     log.warning("Install must be run as root.")
     exit(1)
 
 ## Prepare installation directory
-
 if not os.path.exists(PROJECT_ROOT) or not PROJECT_ROOT.endswith(f"/{PROJECT_NAME}"):
-    log.warning(f"Could not find the {PROJECT_NAME} directory.  Make sure you run this script from the directory it's located in.")
+    log.warning(
+        f"Could not find the {PROJECT_NAME} directory.  Make sure you run this script from the directory it's located in.")
     exit(1)
 
-if os.path.exists(INSTALL_DIR) and os.listdir(INSTALL_DIR):
-    while (response := input(f"The directory {INSTALL_DIR} exists and is not empty, its contents will be deleted, would you like to continue installation? (y/n)").upper()) not in ("Y","N"):
-        continue
-    if response == "Y":
-        for file in glob.glob(INSTALL_DIR+"/*"):
-            run_without_error(cmd=["rm", "-r", file],
-                            error_msg=f"Encountered an error while deleting the contents of {file}")
-    else:
-        log.info("Exiting.")
-        exit(0)
-elif not os.path.exists(INSTALL_DIR):
-    run_without_error(cmd=["mkdir", INSTALL_DIR], error_msg=f"Could not make dir {INSTALL_DIR}")
+process_dir_file_list(dir_file_list=core, uid=0, gid=0)
+if not copy_file(src_path=daemon_config.source, dest_path=daemon_config.destination, mode=daemon_config.mode, uid=0, 
+                 gid=0, force=False):
+    prompt = (f"The daemon config file: {daemon_config.destination} exists. "
+              f"Would you like to replace the previous configuration? (y/n)")
+    answer = ask_until_answered(question=prompt, accepted=["y", "yes", "n", "no"])
+    if answer in {"yes", "y"}:
+        copy_file(src_path=daemon_config.source, dest_path=daemon_config.destination, mode=daemon_config.mode, uid=0,
+                  gid=0, force=True)
 
+### Venv
 run_without_error(cmd=["virtualenv", "-q", "-p", "/usr/bin/python3", VENV],
                   error_msg="Unable to create the virtual environment.")
-run_without_error(cmd=["cp", "-r",
-                       f"{PROJECT_ROOT}/core",
-                       f"{PROJECT_ROOT}/resources",
-                       f"{PROJECT_ROOT}/plugin",
-                       f"{PROJECT_ROOT}/scripts/uninstall",
-                       f"{PROJECT_ROOT}/no_doze.py",
-                       INSTALL_DIR], error_msg=f"Unable to transfer source files to {INSTALL_DIR}.")
-run_without_error(cmd=[f"{VENV_BIN}/pip", "install", "-r", f"{PROJECT_ROOT}/requirements.txt"],
-                  error_msg="An error occurred while installing dependencies.")
 
 ### Prepare systemd
-run_without_error(cmd=["cp", f"{SCRIPTS_DIR}/no-doze.service", "/etc/systemd/system"],
+run_without_error(cmd=["cp", f"{SCRIPTS_DIR}/no-dozed.service", "/etc/systemd/system"],
                   error_msg="Unable to transfer the systemd unit file.")
 run_without_error(cmd=["systemctl", "daemon-reload"], error_msg="Unable to reload daemons")
 
-while (response := input(f"Would you like NoDoze to autostart on boot (i.e. systemd enable)? (y/n)").upper()) not in ("Y", "N"):
-    continue
-if response == "Y":
-    run_without_error(cmd=["systemctl", "enable", "no-doze.service"], error_msg="Unable to enable the no-doze service.")
+start_daemon = ask_until_answered(question="Would you like NoDoze daemon to autostart on boot (i.e. systemd enable)? (y/n)",
+                              accepted=["y", "n"])
+if start_daemon == "y":
+    run_without_error(cmd=["systemctl", "--now", "enable", "no-dozed.service"],
+                      error_msg="Unable to enable the no-doze service.")
 else:
-    log.info("Run 'systemd enable no-doze.service' whenever you'd like no-doze to autostart")
-# pro tips
-log.info(f"To configure no-doze check out {INSTALL_DIR+'/resources/config.yml'}" )
-log.info("To start NoDoze run: 'systemctl start no-doze.service'")
-log.info("To check the status of NoDoze, run: 'journalctl -u no-doze.service --follow'")
-log.info("Installation completed successfully.")
+    start_daemon = None # used by client config
+    log.info("Run 'systemd enable no-dozed.service' whenever you'd like no-doze to autostart")
 
+
+### clients
+prompt = "Would you like to configure no-doze-client for a user?"
+while "y" == ask_until_answered(question=prompt, accepted=["y", "n"]):
+    prompt = "Enter login user name: "
+    username = input(prompt).strip()
+    result = subprocess.run(["id", "-u", username], encoding='ascii', stdout=subprocess.PIPE)
+    if result.returncode != 0:
+        print(f"Could not find user: '{username}'. Try again.")
+        continue
+    user_uid = int(result.stdout.strip())
+    result = subprocess.run(["id", "-u", username], encoding='ascii', stdout=subprocess.PIPE)
+    if result.returncode != 0:
+        print(f"Could not lookup group for user {username}. Try again.")
+        continue
+    user_group = int(result.stdout.strip())
+    result = subprocess.run(["echo", f"~{username}"], encoding='ascii', stdout=subprocess.PIPE)
+    if result.returncode != 0:
+        print(f"Could not find user's home directory {username}.")
+        continue
+    home = result.stdout
+    process_dir_file_list(dir_file_list=client_shared, uid=user_uid, gid=user_group, dest_dir=home)
+
+    client_config_dest = os.path.join(home, client_config.destination)
+    if not copy_file(src_path=client_config.source, dest_path=client_config_dest, mode=client_config.mode, uid=user_uid,
+                  gid=user_group, force=False):
+        prompt = (f"The client config file: {client_config_dest} exists. "
+                  f"Would you like to replace the previous configuration? (y/n)")
+        answer = ask_until_answered(question=prompt, accepted=["y", "yes", "n", "no"])
+        if answer in {"yes", "y"}:
+            copy_file(src_path=client_config.source, dest_path=client_config_dest, mode=client_config.mode,
+                      uid=user_uid, gid=user_group, force=True)
+        if start_daemon and "y" == ask_until_answered(question=f"Start no-doze client for at boot? (y/n)",
+                                                      accepted=["y","n"]):
+            run_without_error(cmd=["systemctl", "--now", "--user", "enable", "no-doze-client.service"],
+                              error_msg="Unable to enable the no-doze service.")
+
+if not start_daemon:
+    log.info(f"To configure no-doze daemon check out {INSTALL_DIR + '/resources/config.yml'}")
+    log.info("To start NoDoze run: 'systemctl start no-dozed.service'")
+    log.info("To check the status of NoDoze, run: 'journalctl -u no-dozed.service --follow'")
+    log.info(f"To configure no-doze clients go to ~/.config/no-doze/no-doze-client.yml")
+    log.info(f"To start a no-doze client run systemctl --user start no-doze-client.service")
+
+log.info("Installation completed successfully.")
