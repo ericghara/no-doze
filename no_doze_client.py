@@ -123,7 +123,7 @@ class NoDozeClient:
                 self._log.warning(f"Unable to open fifo: {fifo_path}", exc_info=e)
                 self._fifo = None
 
-        self.send_message(BindMessage(pid=os.getpid(), gid=os.getgid(), attempt=self._connection_attempt))
+        self.send_message(BindMessage(pid=os.getpid(), uid=os.getuid(), attempt=self._connection_attempt))
 
     def close_fifo(self) -> None:
         if self._fifo is None:
@@ -198,7 +198,7 @@ class NoDozeClient:
                 continue
 
             if self._handle_scheduled_checks():
-                self.send_message(InhibitMessage(pid=os.getpid(), gid=os.getgid(),
+                self.send_message(InhibitMessage(pid=os.getpid(), uid=os.getuid(),
                                                  expiry_timestamp=self._inhibit_until))
             next_check: datetime = self._schedule.peek().time
             sleep_duration_sec = self._calc_sec_until(next_check)

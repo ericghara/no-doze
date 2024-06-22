@@ -9,13 +9,14 @@ from plugin.qbittorrent import QbittorrentInhibitor
 
 class TestQbittorrentInhibitorSingleChannel(TestCase):
     single_channel_yml = """
-    qbittorrent:
-        host_url: "http://test:1234"
-        username: "test"
-        password: "123456789"
-        downloading:
-            period_min: .0005 # 30 ms
-            min_speed_kbps: 100 # or 3072 bytes / 30 ms
+    plugins:
+        qbittorrent:
+            host_url: "http://test:1234"
+            username: "test"
+            password: "123456789"
+            downloading:
+                period_min: .0005 # 30 ms
+                min_speed_kbps: 100 # or 3072 bytes / 30 ms
     """
 
     def setUp(self) -> None:
@@ -110,13 +111,14 @@ class TestQbittorrentInhibitorSingleChannel(TestCase):
 
 class TestQbittorrentInhibitorSeedingChannel(TestCase):
     dual_channel_yml = """
-    qbittorrent:
-        host_url: "http://test:1234"
-        username: "test"
-        password: "123456789"
-        seeding:
-            period_min: .0005  # 30 ms
-            min_speed_kbps: 10  # 310 bytes / 30 ms
+    plugins:
+        qbittorrent:
+            host_url: "http://test:1234"
+            username: "test"
+            password: "123456789"
+            seeding:
+                period_min: .0005  # 30 ms
+                min_speed_kbps: 10  # 310 bytes / 30 ms
     """
 
     def setUp(self) -> None:

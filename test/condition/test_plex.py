@@ -11,12 +11,13 @@ class PlexTest(unittest.TestCase):
 
     def setUp(self):
         yml_str = """
-                plex:
-                    token: "A1AAAAAAAAAAA_AAAAA1"
-                    base_url: "http://localhost:12345"
-                    period_min: .0005 # 30 ms
-                    max_periods_paused: 2
-                """
+                plugins:
+                    plex:
+                        token: "A1AAAAAAAAAAA_AAAAA1"
+                        base_url: "http://localhost:12345"
+                        period_min: .0005 # 30 ms
+                        max_periods_paused: 2
+                    """
         config_provider._load_string(yml_str)
         # This is the plex server constructed by PlexServer() constructor
         self.templateMock = Mock()

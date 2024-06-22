@@ -4,9 +4,9 @@ from typing import *
 API_VERSION = 2
 
 class InhibitMessage:
-    def __init__(self, pid:int, gid: int, expiry_timestamp: datetime):
+    def __init__(self, pid:int, uid: int, expiry_timestamp: datetime):
         self.pid : int = pid
-        self.gid : int = gid
+        self.uid : int = uid
         self.expiry_timestamp : datetime = expiry_timestamp
         self.type: str = type(self).__name__
         self.version: int = API_VERSION
@@ -26,9 +26,9 @@ class InhibitMessage:
 
 class BindMessage:
 
-    def __init__(self, pid: int, gid:int, attempt: int):
+    def __init__(self, pid: int, uid:int, attempt: int):
         self.pid : int = pid
-        self.gid : int = gid
+        self.uid : int = uid
         self.attempt : int = attempt
         self.type : str = type(self).__name__
         self.version : int = API_VERSION

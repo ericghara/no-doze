@@ -156,7 +156,7 @@ class Server:
             return
 
         if self._inhibitor.set_inhibitor(until=msg.expiry_timestamp):
-            self._log.debug(f"Sleep inhibited until: {msg.expiry_timestamp} by {msg.gid}:{msg.pid}.")
+            self._log.debug(f"Sleep inhibited until: {msg.expiry_timestamp} by {msg.uid}:{msg.pid}.")
         else:
             self._log.debug(f"Received message that does not extend sleep.")
 

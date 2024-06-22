@@ -7,7 +7,7 @@ from common.config_provider import CastFn
 class TestConfigProvider(TestCase):
 
     def setUp(self) -> None:
-        pass
+        config_provider._load_string("") # clear yaml between tests
 
     def tearDown(self) -> None:
         pass

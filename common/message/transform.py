@@ -26,9 +26,9 @@ class MessageDecoder(json.JSONDecoder):
             o = None
             match t:
                 case messages.BindMessage.__name__:
-                    o = messages.BindMessage(pid=d["pid"], gid=d["gid"], attempt=d["attempt"])
+                    o = messages.BindMessage(pid=d["pid"], uid=d["uid"], attempt=d["attempt"])
                 case messages.InhibitMessage.__name__:
-                    o = messages.InhibitMessage(pid=d["pid"], gid=d["gid"],
+                    o = messages.InhibitMessage(pid=d["pid"], uid=d["uid"],
                                                 expiry_timestamp=datetime.fromtimestamp(d["expiry_timestamp"]))
                 case _:
                     raise ValueError(f"Could not match {t} to a type.")
