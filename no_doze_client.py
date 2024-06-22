@@ -81,6 +81,9 @@ class NoDozeClient:
         return len(msg_b)
 
     def _identify_fifo(self) -> path:
+        # The gist of the logic is to wait until there is only one fifo available
+        # there *are* edge cases, but they should be quite rare as the daemon in all but extreme cases
+        # clears deletes its fifo on shutdown and a new daemon clears stale fifos on startup
         matcher = re.compile(self.FIFO_PREFIX + r"(\d+)")
         found_fifo = None
         # add some max attempts? here too?

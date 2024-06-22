@@ -53,7 +53,7 @@ class Server:
         self._permissions = permissions
         self._fifo: Optional[IO] = None
         self._inhibitor: Optional[ScheduledInhibition] = None
-        self._bound_client = None # pid of connected client
+        self._bound_clients = set() # pids of connected clients
         self._sig_w_fd: Optional[int] = None
         self._sig_r_fd: Optional[int] = None
         self._poll: Optional[poll] = None
@@ -88,6 +88,7 @@ class Server:
         except Exception as e:
             self._log.warning("Unable to close read/write signal pipe(s)", exc_info=e)
         try:
+            # unlink before unbind to prevent race
             os.unlink(self._fifo_path)
         except Exception as e:
             self._log.warning(f"Unable to delete fifo {self._fifo_path or '[Unknown]'}", exc_info=e)
@@ -97,9 +98,12 @@ class Server:
             self._inhibitor.__exit__(exc_type=exc_type, exc_val=exc_val, exc_tb=exc_tb)
             self._timer = None
 
-        if self._bound_client:
-            os.kill(self._bound_client, signal.SIGUSR1)
-        self._bound_client = None
+        for client_pid in self._bound_clients:
+            try:
+                os.kill(client_pid, signal.SIGUSR1)
+            except Exception as e:
+                self._log.error(f"Unable to send unbind signal to pid {client_pid}.")
+        self._bound_clients.clear()
 
     def _open(self) -> IO:
         self._clear_stale_fifos()
@@ -129,29 +133,20 @@ class Server:
                     stale_fifo_path = os.path.join(self._base_dir, maybe_fifo)
                     self._log.info(f"Deleting stale FIFO: {stale_fifo_path}")
                     os.unlink(stale_fifo_path)
-                elif pid == self._bound_client:
-                    self._log.info(f"An already bound client: {pid}, sent a bind request.  Allowing.")
                 else:
                     self._log.warning(f"Cannot clear stale FIFOs another server appears to be running. PID:{pid}")
                     raise FileExistsError("Another FIFO exists and is in use. Refusing to delete.")
 
     def _handle_bind(self, msg: BindMessage) -> None:
-        if self._bound_client is None:
-            self._bound_client = msg.pid
-            self._log.info(f"Connecting to client: pid: {msg.pid}.")
+        # currently same uid binding multiple times is allowed.
+        if msg.pid in self._bound_clients:
+            self._log.info(f"An already bound client: uid: {msg.uid} pid: {msg.pid}, sent a bind request.  Allowing.")
         else:
-            self._log.warning(f"Ignoring bind request from a client: {msg.pid}.  "
-                              f"Already bound to: {self._bound_client}")
-            try:
-                self._log.info(f"Sending unbind signal to: {msg.pid}")
-                # Send client a (POSIX) signal to unbind.  Eventually it should give up, or potentially
-                # user started a new client in preparation to restart this server.
-                os.kill(msg.pid, self.UNBIND_SIGNAL)
-            except ProcessLookupError as e:
-                self._log.warning(f"Unable to send unbind message to: {msg.pid}.  Process went down?")
+            self._bound_clients.add(msg.pid)
+            self._log.info(f"Connecting to client, uid: {msg.uid}, pid: {msg.pid}.")
 
     def _handle_inhibit(self, msg: InhibitMessage) -> None:
-        if msg.pid != self._bound_client:
+        if msg.pid not in self._bound_clients:
             self._log.warning(f"Ignoring message from unbound client. Pid: {msg.pid}")
             return
 
@@ -216,8 +211,8 @@ class Server:
                 else:
                     self._log.warning(f"Polled from an unexpected fd: {fd}")
 
-    def bound_to(self) -> int:
-        return self._bound_client
+    def bound_to(self) -> Set[int]:
+        return {pid for pid in self._bound_clients}
 
     def inhibited(self) -> bool:
         return self._inhibitor.inhibit_until() >= datetime.now()

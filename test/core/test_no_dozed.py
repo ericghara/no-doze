@@ -65,14 +65,15 @@ class TestNoDozeD(unittest.TestCase):
     def test__binds_when_unbound(self):
         msg = BindMessage(pid=123, uid=567, attempt=0)
         self.server._handle_bind(msg)
-        self.assertEqual(msg.pid, self.server.bound_to())
+        self.assertEqual({msg.pid}, self.server.bound_to())
 
     def test__does_not_rebind(self):
-        msg = BindMessage(pid=123, uid=567, attempt=0)
-        self.server._handle_bind(msg)
-        msg2 = BindMessage(pid=321, uid=567, attempt=0)
-        self.server._handle_bind(msg2)
-        self.assertEqual(msg.pid, self.server.bound_to())
+        expected = {123, 321}
+        for pid in expected:
+            # currently same uid can bind multiple times
+            msg = BindMessage(pid=pid, uid=567, attempt=0)
+            self.server._handle_bind(msg)
+        self.assertEqual(expected, self.server.bound_to())
 
     def test__handle_inhibit_ignores_unbound(self):
         msg = InhibitMessage(pid=123, uid=567, expiry_timestamp=datetime.now() + timedelta(seconds=100))
