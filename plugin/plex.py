@@ -54,6 +54,8 @@ class PlexInhibitor(InhibitingCondition):
             else:
                 currently_paused.append(session)
         inhibited |= self._update_paused(currently_paused)
+        if inhibited:
+            self.log.debug("Is inhibiting.")
         return inhibited
 
     def _create_server_template(self) -> PlexServer:
@@ -96,7 +98,10 @@ class PlexInhibitor(InhibitingCondition):
             paused_at = self.paused.get(identifier, datetime.now())
             next_paused[identifier] = paused_at
             if datetime.now() - paused_at < self.pause_timeout:
+                self.log.debug("Paused playback will inhibit sleep.")
                 inhibited = True
+            else:
+                self.log.debug("Paused playback will not inhibit sleep (timed-out).")
         self.paused = next_paused
         return inhibited
 

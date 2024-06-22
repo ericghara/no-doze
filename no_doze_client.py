@@ -109,7 +109,7 @@ class NoDozeClient:
             if self._connection_attempt > self._max_reconnections:
                 self._log.warning("Max connection attempts exceeded.")
                 self.stop()
-                return
+                exit(-1)
 
             if self._connection_attempt != 1:
                 self._log.info(f"Waiting {self._retry_delay} before reconnecting.")
@@ -239,6 +239,7 @@ def main() -> None:
             client.add_inhibitor(inhibiting_process)
         client.run()
 
+# todo add signal handler
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="no_doze_client",
@@ -247,7 +248,7 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--config', type=str, help="path to config file",
                         default=DEFAULT_CONFIG_PATH)
     args = parser.parse_args()
-    config_provider.load_file(args.config)
+    config_provider.load_file(path.expanduser(args.config))
     logging.basicConfig(level=config_provider.get_value([CLIENT_ROOT_KEY, LOGGING_LEVEL_KEY], "INFO"))
     if os.getuid() == 0:
         logging.info("no_doze_client does not need to be run as root. Consider reconfiguring.")
