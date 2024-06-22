@@ -1,0 +1,15 @@
+[Service]
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+NoNewPrivileges=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+Type=simple
+WorkingDirectory=/usr/lib/no-doze
+ExecStart=/usr/lib/no-doze/venv/bin/python3 no_doze_client.py -c ~/.config/no-doze/no-doze-client.yml
+Restart=on-failure
+Slice=session.slice
+
+[Install]
+WantedBy=default.target

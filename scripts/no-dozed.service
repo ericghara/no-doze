@@ -2,8 +2,9 @@
 Description=Prevent system from sleeping under certain conditions
 
 [Service]
-WorkingDirectory=/opt/no-doze
-ExecStart=/opt/no-doze/venv/bin/python3 no_doze.py
+WorkingDirectory=/usr/lib/no-doze
+Group=no-doze
+ExecStart=/usr/lib/no-doze/venv/bin/python3 no_dozed.py -c /etc/no-doze/no-dozed.yml
 
 Restart=always
 RestartSec=10

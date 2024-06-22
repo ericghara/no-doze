@@ -105,6 +105,8 @@ class Server:
         self._clear_stale_fifos()
         self._log.debug(f"Creating FIFO {self._fifo_path}.")
         os.mkfifo(path=self._fifo_path, mode=self._permissions)
+        # mkfifo does not properly set the permissions write bit
+        os.chmod(path=self._fifo_path, mode=self._permissions)
         f = open(self._fifo_path, mode="r+b", buffering=0)
         return f
 
