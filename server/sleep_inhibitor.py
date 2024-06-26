@@ -61,18 +61,22 @@ class SleepInhibitor:
     _LOGIND_OBJECT_PATH = '/org/freedesktop/login1'
     _LOGIND_MANAGER_INTERFACE = 'org.freedesktop.login1.Manager'
     # time limits exist for delay modes.  Block mode requires root privilege
-    _INHIBITION_MODE = "block" # block | delay
     _INHIBIT_WHAT = "sleep"
 
-    def __init__(self, who: str, why: str):
+    def __init__(self, who: str, why: str, mode: str = 'block'):
         """
 
         :param who: Process requesting sleep to be blocked/delayed
         :param why: Reason sleep is being blocked/delayed
+        :param mode: 'block' or 'delay', delay will prevent sleep for a few seconds block can delay sleep
+        indefinitely (if run with root privilege)
         """
         self._log = logging.getLogger(type(self).__name__)
         self._who = who
         self._why = why
+        if mode not in ('block', 'delay'):
+            raise ValueError("Mode must be 'block' or 'delay'")
+        self._mode = mode
         self._system_bus: Optional[dbus.SystemBus] = None
         self._login_proxy: Optional[ProxyObject] = None
         self._login_manager_interface: Optional[Interface] = None
@@ -89,7 +93,7 @@ class SleepInhibitor:
         if self._sleep_lock:
             self._log.debug("Did not take a new lock, a lock is already held.")
             return False
-        descriptor_obj = self._login_manager_interface.Inhibit(self._INHIBIT_WHAT, self._who, self._why, self._INHIBITION_MODE)
+        descriptor_obj = self._login_manager_interface.Inhibit(self._INHIBIT_WHAT, self._who, self._why, self._mode)
         self._sleep_lock = FileDescriptorLock(descriptor_obj)
         self._sleep_lock.take()
         return True

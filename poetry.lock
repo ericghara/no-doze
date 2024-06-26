@@ -140,6 +140,22 @@ files = [
 ]
 
 [[package]]
+name = "jeepney"
+version = "0.8.0"
+description = "Low-level, pure Python DBus protocol wrapper."
+category = "main"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "jeepney-0.8.0-py3-none-any.whl", hash = "sha256:c0a454ad016ca575060802ee4d590dd912e35c122fa04e70306de3d076cce755"},
+    {file = "jeepney-0.8.0.tar.gz", hash = "sha256:5efe48d255973902f6badc3ce55e2aa6c5c3b3bc642059ef3a91247bcfcc5806"},
+]
+
+[package.extras]
+test = ["async-timeout", "pytest", "pytest-asyncio (>=0.17)", "pytest-trio", "testpath", "trio"]
+trio = ["async_generator", "trio"]
+
+[[package]]
 name = "packaging"
 version = "24.1"
 description = "Core utilities for Python packages"
@@ -296,4 +312,4 @@ testing = []
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "a3958390db7681deecfe0b1323968812b44f079a579a64c98f9a1dc9aece5aad"
+content-hash = "c6b38d6f7a3ec943ed5ded4782de05df54d05805a29af023213433e2c81994ae"

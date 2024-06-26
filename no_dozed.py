@@ -17,6 +17,7 @@ import select
 from common.message.transform import MessageDecoder
 from common.message.messages import InhibitMessage, BindMessage
 from server.scheduled_inhibition import ScheduledInhibition
+from server.sleep_watcher import SleepWatcher
 import common.config_provider as config_provider
 from common.config_provider import CastFn
 import argparse
@@ -24,7 +25,6 @@ import argparse
 # YAML config keys
 LOGGING_LEVEL_KEY = "logging_level"
 BASE_DIR_KEY = "base_dir"
-# todo delete poll_interval key from config yaml
 FIFO_PERMISSIONS_KEY = "fifo_permissions"
 
 # Global defaults
@@ -41,6 +41,7 @@ class Server:
     FIFO_BUFFER_B = 4096  # linux default
     FIFO_PREFIX = "FIFO_"
     UNBIND_SIGNAL = signal.SIGUSR1
+    ABOUT_TO_SLEEP_SIGNAL = signal.SIGRTMIN + 0
 
     WHO = "No-Doze Service"
     WHY = "A monitored process/event is in progress."
@@ -53,6 +54,7 @@ class Server:
         self._permissions = permissions
         self._fifo: Optional[IO] = None
         self._inhibitor: Optional[ScheduledInhibition] = None
+        self._watcher: Optional[SleepWatcher] = None
         self._bound_clients = set() # pids of connected clients
         self._sig_w_fd: Optional[int] = None
         self._sig_r_fd: Optional[int] = None
@@ -69,10 +71,15 @@ class Server:
         for sig in signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT:
             signal.signal(signalnum=sig, handler=lambda n, f: self._log.debug(f"Caught signal: {n}. Sending to run."))
 
-        if self._inhibitor:
+        if self._inhibitor or self._watcher:
             raise ValueError("Cannot re-open this resource, it is already open.")
         self._inhibitor = ScheduledInhibition(who=self.WHO, why=self.WHY)
         self._inhibitor.__enter__()
+        pid = os.getpid()
+        self._watcher = SleepWatcher(before_sleep_callback=lambda: os.kill(pid, self.ABOUT_TO_SLEEP_SIGNAL))
+        self._watcher.__enter__()
+        # all wrong needs to be an event loop
+        self._watcher.run()
 
         return self
 
