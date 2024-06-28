@@ -1,9 +1,12 @@
 import logging
+import signal
 from typing import *
+
 import jeepney as _jeep
 import jeepney.io.blocking as _jeep_io
-from sleep_inhibitor import SleepInhibitor
-import signal
+
+from server.sleep_inhibitor import SleepInhibitor
+
 
 class SleepWatcher:
 

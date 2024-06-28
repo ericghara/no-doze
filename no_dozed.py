@@ -1,26 +1,29 @@
 #!/usr/bin/env python
 
+import argparse
+import glob
+import json
 import logging
 import os
 import os.path
-from typing import *
-from datetime import timedelta
-from datetime import datetime
-from os import path
-import json
-import signal
-import glob
 import re
-import subprocess
-from select import poll
 import select
-from common.message.transform import MessageDecoder
-from common.message.messages import InhibitMessage, BindMessage
-from server.scheduled_inhibition import ScheduledInhibition
-from server.sleep_watcher import SleepWatcher
+import signal
+import subprocess
+import threading
+import time
+from datetime import datetime
+from datetime import timedelta
+from os import path
+from select import poll
+from typing import *
+
 import common.config_provider as config_provider
 from common.config_provider import CastFn
-import argparse
+from common.message.messages import InhibitMessage, BindMessage
+from common.message.transform import MessageDecoder
+from server.scheduled_inhibition import ScheduledInhibition
+from server.sleep_watcher import SleepWatcher
 
 # YAML config keys
 LOGGING_LEVEL_KEY = "logging_level"
@@ -42,6 +45,9 @@ class Server:
     FIFO_PREFIX = "FIFO_"
     UNBIND_SIGNAL = signal.SIGUSR1
     ABOUT_TO_SLEEP_SIGNAL = signal.SIGRTMIN + 0
+    # time to delay sleep so clients can check for inhibiting conditions.
+    # should be << 5 sec
+    SLEEP_DELAY = timedelta(milliseconds=500)
 
     WHO = "No-Doze Service"
     WHY = "A monitored process/event is in progress."
@@ -68,7 +74,10 @@ class Server:
         self._poll.register(self._fifo, select.POLLIN)
         self._poll.register(self._sig_r_fd, select.POLLIN)
         signal.set_wakeup_fd(self._sig_w_fd)
-        for sig in signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT:
+        # note ABOUT_TO_SLEEP not currently used as a signal, it is sent directly to pipe w fd, but just handling
+        # that signal for consistency
+        # todo look into just sending as a signal?
+        for sig in signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT, self.ABOUT_TO_SLEEP_SIGNAL:
             signal.signal(signalnum=sig, handler=lambda n, f: self._log.debug(f"Caught signal: {n}. Sending to run."))
 
         if self._inhibitor or self._watcher:
@@ -76,11 +85,21 @@ class Server:
         self._inhibitor = ScheduledInhibition(who=self.WHO, why=self.WHY)
         self._inhibitor.__enter__()
         pid = os.getpid()
-        self._watcher = SleepWatcher(before_sleep_callback=lambda: os.kill(pid, self.ABOUT_TO_SLEEP_SIGNAL))
-        self._watcher.__enter__()
-        # all wrong needs to be an event loop
-        self._watcher.run()
 
+        def before_sleep_callback():
+            """
+            Writes to signal pipe.  This is called from another thread
+            """
+            try:
+                os.write(self._sig_w_fd, chr(self.ABOUT_TO_SLEEP_SIGNAL).encode(encoding='ascii'))
+                time.sleep(self.SLEEP_DELAY.total_seconds())
+            except Exception as e:
+                self._log.warning("Failed to send sleep signal to daemon", exc_info=e)
+
+        # watcher
+        self._watcher = SleepWatcher(before_sleep_callback=before_sleep_callback)
+        self._watcher.__enter__()
+        threading.Thread(target=self._watcher.run, daemon=True).start()
         return self
 
     def __exit__(self, exc_type: any, exc_val: any, exc_tb: any):
@@ -94,6 +113,9 @@ class Server:
             os.close(self._sig_r_fd)
         except Exception as e:
             self._log.warning("Unable to close read/write signal pipe(s)", exc_info=e)
+        finally:
+            self._sig_w_fd = None
+            self._signal_r_fd = None
         try:
             # unlink before unbind to prevent race
             os.unlink(self._fifo_path)
@@ -104,6 +126,10 @@ class Server:
         if self._inhibitor:
             self._inhibitor.__exit__(exc_type=exc_type, exc_val=exc_val, exc_tb=exc_tb)
             self._timer = None
+        if self._watcher:
+            # causes thread watcher is running on to exit (albeit not in the cleanest way)
+            self._watcher.__exit__(exec_type=None, exec_value=None, exec_tb=None)
+            self._watcher = None
 
         for client_pid in self._bound_clients:
             try:
@@ -162,6 +188,22 @@ class Server:
         else:
             self._log.debug(f"Received message that does not extend sleep.")
 
+    def _handle_about_to_sleep(self) -> None:
+        self._log.debug("Caught about to sleep signal")
+        clients = self._bound_clients
+        self._bound_clients = set()
+        # send signals and filter out dead clients
+        for client_pid in clients:
+            for _ in range(3):
+                if client_pid in self._bound_clients:
+                    break
+                try:
+                    os.kill(client_pid, self.ABOUT_TO_SLEEP_SIGNAL)
+                    self._bound_clients.add(client_pid)
+                except Exception as e:
+                    self._log.debug(f"Unable to signal client that we are about to sleep. Client: {client_pid}",
+                                    exc_info=e)
+
     def _receive_message(self) -> None:
         raw_message = self._fifo.readline()
         if len(raw_message) >= self.FIFO_BUFFER_B:
@@ -201,6 +243,9 @@ class Server:
         if sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
             self._log.info(f"Caught signal: {sig}. Starting Shutdown.")
             return False
+        elif sig == self.ABOUT_TO_SLEEP_SIGNAL:
+            self._handle_about_to_sleep()
+            return True
         else:
             self._log.info(f"Caught signal: {sig}. Ignoring.")
             return True
@@ -241,7 +286,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config_provider.load_file(args.config)
-    logging.basicConfig(level=config_provider.get_value([LOGGING_LEVEL_KEY], "INFO"))
+    logging.basicConfig(level=config_provider.get_value([LOGGING_LEVEL_KEY], "DEBUG"))
     if os.getuid() != 0:
         logging.warning("no_dozed should be run as root a user.  Feel free to have a look around, but this won't "
                         "be able to inhibit sleep.")

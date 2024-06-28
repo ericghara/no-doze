@@ -1,25 +1,27 @@
 #!/usr/bin/env python
 
+import argparse
 import datetime
+import glob
+import json
 import logging
+import os
+import os.path as path
+import re
+import select
+import signal
 import time
 from datetime import datetime, timedelta
+from select import poll
 from typing import *
 
-from common import config_provider
-from common.config_provider import CastFn
 from client.inhibiting_condition import InhibitingCondition
 from client.inhibiting_condition_registrar import registrar
-from common.priority_queue import PriorityQueue
-import json
-from common.message.transform import MessageEncoder
+from common import config_provider
+from common.config_provider import CastFn
 from common.message.messages import BindMessage, InhibitMessage
-import glob
-import signal
-import os.path as path
-import os
-import re
-import argparse
+from common.message.transform import MessageEncoder
+from common.priority_queue import PriorityQueue
 
 # YAML config keys
 CLIENT_ROOT_KEY = "general"
@@ -49,6 +51,7 @@ class NoDozeClient:
     FIFO_PREFIX = "FIFO_"
     RETRY_DELAY = timedelta(seconds=1)
     UNBIND_SIGNAL = signal.SIGUSR1
+    ABOUT_TO_SLEEP_SIGNAL = signal.SIGRTMIN + 0
 
     def __init__(self, base_dir: path=DEFAULT_BASE_DIR, startup_delay: timedelta=timedelta(),
                  max_reconnections: int = DEFAULT_CONNECTION_ATTEMPTS,
@@ -64,6 +67,9 @@ class NoDozeClient:
         self._inhibit_until = datetime.now()
         self._max_reconnections = max_reconnections
         self._retry_delay = retry_delay
+        self._sig_w_fd: Optional[int] = None
+        self._sig_r_fd: Optional[int] = None
+        self._poll: Optional[poll] = None
         self._run = True
 
     def send_message(self, obj: Any) -> int:
@@ -181,6 +187,22 @@ class NoDozeClient:
             self._schedule.offer(ScheduledCheck(time=scheduled_time, inhibiting_process=inhibiting_process))
         return sleep_increased
 
+    def _handle_unscheduled_checks(self) -> bool:
+        """
+        For "last gasp" checks before sleep.  Does not touch the schedule at all.  Simply checks all
+        inhibiting processes and updates _sleep_until respectively.
+        :return: true if sleep inhibition required else false
+        """
+        sleep_increased = False
+        for inhibiting_process in self._inhibiting_processes:
+            if inhibiting_process.does_inhibit():
+                scheduled_time = datetime.now() + inhibiting_process.period()
+                if scheduled_time > self._inhibit_until:
+                    self._inhibit_until = scheduled_time
+                    sleep_increased = True
+        return sleep_increased
+
+
     def _calc_sec_until(self, until: datetime) -> float:
         now = datetime.now()
         sec = (until - now).total_seconds()
@@ -189,23 +211,54 @@ class NoDozeClient:
             return 0
         return sec
 
+    def _read_signal(self, fd: int) -> int:
+        """
+        Get signal (single byte) or return -1 on error
+        :param fd:
+        :return:
+        """
+        sig = -1
+        try:
+            sig = os.read(fd, 1)[0]
+        except Exception as e:
+            self._log.warning(f"Error while reading signal.", exc_info=e)
+        return sig
+
     def run(self) -> None:
         if not self._inhibiting_processes:
             raise ValueError("Cannot start without any inhibiting conditions.  Check your configuration.")
-
         while self._run:
             if self._fifo is None:
                 self.open_fifo()
                 # give client a chance to reply to bind message (via a signal)
                 time.sleep(self._retry_delay.total_seconds())
                 continue
+            # negative timeout blocks forever
+            next_check_ms = round(self._calc_sec_until(self._schedule.peek().time)*1_000)
+            events = self._poll.poll(next_check_ms)
+            if not events:
+                # regular expiry check schedule for event
+                if self._handle_scheduled_checks():
+                    self.send_message(InhibitMessage(pid=os.getpid(), uid=os.getuid(),
+                                                     expiry_timestamp=self._inhibit_until))
+            else:
+                # some interrupt
+                for fd, _ in events:
+                    if fd != self._sig_r_fd:
+                        raise RuntimeError(f"Unknown file descriptor: {fd}")
+                    sig = self._read_signal(fd)
+                    if sig == self.ABOUT_TO_SLEEP_SIGNAL:
+                        if self._handle_unscheduled_checks():
+                            self.send_message(InhibitMessage(pid=os.getpid(), uid=os.getuid(),
+                                                             expiry_timestamp=self._inhibit_until))
+                    elif sig == self.UNBIND_SIGNAL:
+                        self.close_fifo(),
+                    elif sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+                        self._log.info(f"Caught signal: {sig}. Starting Shutdown.")
+                        self._run = False
+                    else:
+                        self._log.info(f"Caught unrecognized signal: {sig}. Ignoring.")
 
-            if self._handle_scheduled_checks():
-                self.send_message(InhibitMessage(pid=os.getpid(), uid=os.getuid(),
-                                                 expiry_timestamp=self._inhibit_until))
-            next_check: datetime = self._schedule.peek().time
-            sleep_duration_sec = self._calc_sec_until(next_check)
-            time.sleep(sleep_duration_sec)
 
     def stop(self):
         """
@@ -216,11 +269,31 @@ class NoDozeClient:
 
 
     def __enter__(self) -> 'NoDozeClient':
-        # currently a no op
+        if any((self._poll, self._fifo)):
+            raise RuntimeError('Cannot reopen resource. Already Open.')
+        self._sig_r_fd, self._sig_w_fd = os.pipe2(os.O_NONBLOCK)
+        self._poll = poll()
+        self._poll.register(self._sig_r_fd, select.POLLIN)
+        signal.set_wakeup_fd(self._sig_w_fd)
+        for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT, signal.SIGALRM,
+                    self.ABOUT_TO_SLEEP_SIGNAL, self.UNBIND_SIGNAL):
+            # need to handle signals for wakeup_fd redirection to actually work
+            signal.signal(signalnum=sig,
+                          handler=lambda n, f: self._log.debug(f"Caught signal: {n}. Redirecting to pipe."))
         return self
 
     def __exit__(self, exc_type: any, exc_val: any, exc_tb: any):
         self.close_fifo()
+        try:
+            signal.set_wakeup_fd(-1)
+            os.close(self._sig_w_fd)
+            os.close(self._sig_r_fd)
+        except Exception as e:
+            self._log.warning("Unable to close read/write signal pipe(s)", exc_info=e)
+        finally:
+            self._sig_w_fd = None
+            self._signal_r_fd = None
+        self._poll = None
 
 
 def main() -> None:
@@ -237,12 +310,10 @@ def main() -> None:
     registrar.scan()
     with NoDozeClient(base_dir=base_dir, max_reconnections=max_reconnections, retry_delay=retry_delay,
                       startup_delay=startup_delay) as client:
-        signal.signal(handler=lambda sig, frame: client.close_fifo(), signalnum=NoDozeClient.UNBIND_SIGNAL)
         for inhibiting_process in registrar:
             client.add_inhibitor(inhibiting_process)
         client.run()
 
-# todo add signal handler
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="no_doze_client",

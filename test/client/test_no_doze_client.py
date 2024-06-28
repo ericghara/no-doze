@@ -1,17 +1,19 @@
-import unittest
-import tempfile
-from no_doze_client import NoDozeClient
-import os.path as path
-import os
-from concurrent.futures import ThreadPoolExecutor
-import time
 import json
-from common.message.transform import MessageDecoder
-from common.message.messages import BindMessage, InhibitMessage
-from datetime import datetime, timedelta
-from client.inhibiting_condition import InhibitingCondition
-from typing import *
 import logging
+import os
+import os.path as path
+import tempfile
+import time
+import unittest
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
+from typing import *
+
+from client.inhibiting_condition import InhibitingCondition
+from common.message.messages import BindMessage, InhibitMessage
+from common.message.transform import MessageDecoder
+from no_doze_client import NoDozeClient
+
 
 class MockInhibitor(InhibitingCondition):
 
@@ -35,10 +37,12 @@ class TestNoDozeClient(unittest.TestCase):
         self.client = NoDozeClient(base_dir=self.dir_name, max_reconnections=self.MAX_RECONNECTIONS,
                                    retry_delay=self.REATTEMPT_DELAY)
         self.client.add_inhibitor(self.inhibitor)
+        self.client.__enter__()
         self.pool = ThreadPoolExecutor(2)
 
     def tearDown(self) -> None:
-        self.client.close_fifo()
+        self.client.__exit__(None, None, None)
+
         if self.dir:
             self.dir.cleanup()
         if self.pool:
@@ -114,7 +118,7 @@ class TestNoDozeClient(unittest.TestCase):
             obj = json.loads(self.readFifo(fifo), cls=MessageDecoder)
             self.assertTrue(isinstance(obj, BindMessage))
             self.client.close_fifo()
-        f.result(timeout=0.050)
+        self.assertRaises(SystemExit, lambda: f.result(timeout=0.050))
 
     def test_client_calls_at_inhibitor_around_scheduled_time(self):
         self.inhibitor.inhibit = True
