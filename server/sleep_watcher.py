@@ -2,8 +2,9 @@ import logging
 import signal
 from typing import *
 
-import jeepney as _jeep
-import jeepney.io.blocking as _jeep_io
+import jeepney as jeep
+# currently jeepney.io.threading does not make sense because it's router requires a thread
+import jeepney.io.blocking as jeep_io
 
 from server.sleep_inhibitor import SleepInhibitor
 
@@ -31,13 +32,13 @@ class SleepWatcher:
         """
         self._log = logging.getLogger(type(self).__name__)
         self._sleep_delay: Optional[SleepInhibitor] = None
-        self._match_rule = _jeep.MatchRule(
+        self._match_rule = jeep.MatchRule(
             type=self._TYPE,
             interface=self._INTERFACE,
             member=self._MEMBER,
             path=self._PATH
         )
-        self._connection: Optional[_jeep_io.DBusConnection] = None
+        self._connection: Optional[jeep_io.DBusConnection] = None
         self._sleep_fn = before_sleep_callback
         self._awake_fn = awake_callback
         self._run = False
@@ -81,8 +82,8 @@ class SleepWatcher:
             raise RuntimeError("Attempting to enter an open SleepWatcher.")
 
         self._sleep_delay = SleepInhibitor(who=self._WHO, why=self._WHY, mode=self._MODE).__enter__()
-        self._connection = _jeep_io.open_dbus_connection(bus='SYSTEM')
-        _jeep_io.Proxy(_jeep.message_bus, self._connection).AddMatch(self._match_rule)
+        self._connection = jeep_io.open_dbus_connection(bus='SYSTEM')
+        jeep_io.Proxy(jeep.message_bus, self._connection).AddMatch(self._match_rule)
         return self
 
     def __exit__(self, exec_type: any, exec_value: any, exec_tb: any):

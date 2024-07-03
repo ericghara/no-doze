@@ -146,7 +146,6 @@ class NoDozeClient:
         self._fifo_path = None
         self._fifo = None
 
-
     def add_inhibitor(self, inhibitor: InhibitingCondition) -> None:
         """
         :param inhibitor:
@@ -201,7 +200,6 @@ class NoDozeClient:
                     self._inhibit_until = scheduled_time
                     sleep_increased = True
         return sleep_increased
-
 
     def _calc_sec_until(self, until: datetime) -> float:
         now = datetime.now()

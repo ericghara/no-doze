@@ -34,12 +34,9 @@ FIFO_PERMISSIONS_KEY = "fifo_permissions"
 DEFAULT_CONFIG_PATH = "resources/no-dozed.yml"
 
 
-
 class Server:
-
     DEFAULT_BASE_DIR = path.relpath("/")
     DEFAULT_FIFO_PERMISSIONS = 0o666
-    DEFAULT_POLL_INTERVAL = timedelta(seconds=10)
 
     FIFO_BUFFER_B = 4096  # linux default
     FIFO_PREFIX = "FIFO_"
@@ -53,19 +50,18 @@ class Server:
     WHY = "A monitored process/event is in progress."
 
     def __init__(self, base_dir: str = DEFAULT_BASE_DIR,
-                 permissions: int = DEFAULT_FIFO_PERMISSIONS):
+                 fifo_permissions: int = DEFAULT_FIFO_PERMISSIONS):
         self._log = logging.getLogger(type(self).__name__)
         self._base_dir = base_dir
         self._fifo_path = path.join(base_dir, f"{self.FIFO_PREFIX}{os.getpid()}")
-        self._permissions = permissions
+        self._fifo_permissions = fifo_permissions
         self._fifo: Optional[IO] = None
         self._inhibitor: Optional[ScheduledInhibition] = None
         self._watcher: Optional[SleepWatcher] = None
-        self._bound_clients = set() # pids of connected clients
+        self._bound_clients = set()  # pids of connected clients
         self._sig_w_fd: Optional[int] = None
         self._sig_r_fd: Optional[int] = None
         self._poll: Optional[poll] = None
-
 
     def __enter__(self) -> 'Server':
         self._fifo = self._open()
@@ -74,9 +70,7 @@ class Server:
         self._poll.register(self._fifo, select.POLLIN)
         self._poll.register(self._sig_r_fd, select.POLLIN)
         signal.set_wakeup_fd(self._sig_w_fd)
-        # note ABOUT_TO_SLEEP not currently used as a signal, it is sent directly to pipe w fd, but just handling
-        # that signal for consistency
-        # todo look into just sending as a signal?
+
         for sig in signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT, self.ABOUT_TO_SLEEP_SIGNAL:
             signal.signal(signalnum=sig, handler=lambda n, f: self._log.debug(f"Caught signal: {n}. Sending to run."))
 
@@ -84,19 +78,14 @@ class Server:
             raise ValueError("Cannot re-open this resource, it is already open.")
         self._inhibitor = ScheduledInhibition(who=self.WHO, why=self.WHY)
         self._inhibitor.__enter__()
-        pid = os.getpid()
-
-        def before_sleep_callback():
-            """
-            Writes to signal pipe.  This is called from another thread
-            """
-            try:
-                os.write(self._sig_w_fd, chr(self.ABOUT_TO_SLEEP_SIGNAL).encode(encoding='ascii'))
-                time.sleep(self.SLEEP_DELAY.total_seconds())
-            except Exception as e:
-                self._log.warning("Failed to send sleep signal to daemon", exc_info=e)
 
         # watcher
+        daemon_pid = os.getpid()  # capture
+
+        def before_sleep_callback():
+            self._send_signal(pid=daemon_pid, sig_num=self.ABOUT_TO_SLEEP_SIGNAL)
+            time.sleep(self.SLEEP_DELAY.total_seconds())
+
         self._watcher = SleepWatcher(before_sleep_callback=before_sleep_callback)
         self._watcher.__enter__()
         threading.Thread(target=self._watcher.run, daemon=True).start()
@@ -132,18 +121,15 @@ class Server:
             self._watcher = None
 
         for client_pid in self._bound_clients:
-            try:
-                os.kill(client_pid, signal.SIGUSR1)
-            except Exception as e:
-                self._log.error(f"Unable to send unbind signal to pid {client_pid}.")
+            self._send_signal(pid=client_pid, sig_num=self.UNBIND_SIGNAL)
         self._bound_clients.clear()
 
     def _open(self) -> IO:
         self._clear_stale_fifos()
         self._log.debug(f"Creating FIFO {self._fifo_path}.")
-        os.mkfifo(path=self._fifo_path, mode=self._permissions)
+        os.mkfifo(path=self._fifo_path, mode=self._fifo_permissions)
         # mkfifo does not properly set the permissions write bit
-        os.chmod(path=self._fifo_path, mode=self._permissions)
+        os.chmod(path=self._fifo_path, mode=self._fifo_permissions)
         f = open(self._fifo_path, mode="r+b", buffering=0)
         return f
 
@@ -153,7 +139,7 @@ class Server:
         *best effort* attempt and is prone to race conditions.
         :return:
         """
-        matcher = re.compile(self.FIFO_PREFIX+r"(\d+)")
+        matcher = re.compile(self.FIFO_PREFIX + r"(\d+)")
         for maybe_fifo in glob.glob(root_dir=self._base_dir, pathname=f"{self.FIFO_PREFIX}*"):
             match = matcher.match(maybe_fifo)
             if match:
@@ -178,9 +164,24 @@ class Server:
             self._bound_clients.add(msg.pid)
             self._log.info(f"Connecting to client, uid: {msg.uid}, pid: {msg.pid}.")
 
+    def _send_signal(self, pid: int, sig_num: int) -> bool:
+        """
+        :param pid:
+        :param sig_num:
+        :return: true on success else false
+        """
+        try:
+            os.kill(pid, sig_num)
+            return True
+        except Exception as e:
+            self._log.debug(f"Unable to send signal: {sig_num} to client: {pid}", exc_info=e)
+            return False
+
     def _handle_inhibit(self, msg: InhibitMessage) -> None:
         if msg.pid not in self._bound_clients:
-            self._log.warning(f"Ignoring message from unbound client. Pid: {msg.pid}")
+            self._log.warning(f"Received message from unbound client. Pid: {msg.pid}")
+            self._send_signal(pid=msg.pid, sig_num=self.UNBIND_SIGNAL)
+            self._log.debug("Sent unbind signal to unknown client.")
             return
 
         if self._inhibitor.set_inhibitor(until=msg.expiry_timestamp):
@@ -191,18 +192,11 @@ class Server:
     def _handle_about_to_sleep(self) -> None:
         self._log.debug("Caught about to sleep signal")
         clients = self._bound_clients
-        self._bound_clients = set()
-        # send signals and filter out dead clients
+        # send signals and drop out dead clients
         for client_pid in clients:
-            for _ in range(3):
-                if client_pid in self._bound_clients:
-                    break
-                try:
-                    os.kill(client_pid, self.ABOUT_TO_SLEEP_SIGNAL)
-                    self._bound_clients.add(client_pid)
-                except Exception as e:
-                    self._log.debug(f"Unable to signal client that we are about to sleep. Client: {client_pid}",
-                                    exc_info=e)
+            if not self._send_signal(pid=client_pid, sig_num=self.ABOUT_TO_SLEEP_SIGNAL):
+                self._bound_clients.discard(client_pid)
+                self._log.debug(f"Unable to signal pid: {client_pid} we are about to sleep.")
 
     def _receive_message(self) -> None:
         raw_message = self._fifo.readline()
@@ -250,7 +244,6 @@ class Server:
             self._log.info(f"Caught signal: {sig}. Ignoring.")
             return True
 
-
     def run(self) -> None:
         do_run = True
 
@@ -269,12 +262,14 @@ class Server:
     def inhibited(self) -> bool:
         return self._inhibitor.inhibit_until() >= datetime.now()
 
+
 def main() -> None:
     base_dir = config_provider.get_value([BASE_DIR_KEY], "./")
     permissions = config_provider.get_value([FIFO_PERMISSIONS_KEY], default="660",
-                                                 cast_fn=CastFn.to_ocatl_int)
-    with Server(base_dir=base_dir, permissions=permissions) as server:
+                                            cast_fn=CastFn.to_ocatl_int)
+    with Server(base_dir=base_dir, fifo_permissions=permissions) as server:
         server.run()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -291,4 +286,3 @@ if __name__ == "__main__":
         logging.warning("no_dozed should be run as root a user.  Feel free to have a look around, but this won't "
                         "be able to inhibit sleep.")
     main()
-
