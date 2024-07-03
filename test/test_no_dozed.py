@@ -1,17 +1,17 @@
-import signal
-import unittest
-import tempfile
+import json
 import os
 import os.path as path
-import json
-from common.message.messages import BindMessage, InhibitMessage
-from common.message.transform import MessageEncoder
+import signal
+import tempfile
+import time
+import unittest
 from datetime import datetime, timedelta
 from threading import Timer
-import time
-
-from no_dozed import Server
 from typing import Any
+
+from common.message.messages import BindMessage, InhibitMessage
+from common.message.transform import MessageEncoder
+from no_dozed import Server
 
 
 class TestNoDozeD(unittest.TestCase):

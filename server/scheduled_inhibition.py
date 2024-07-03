@@ -1,8 +1,10 @@
 import logging
-from typing import *
 from datetime import datetime
 from threading import Timer, Lock
+from typing import *
+
 from server.sleep_inhibitor import SleepInhibitor
+
 
 class ScheduledInhibition:
 
@@ -14,8 +16,8 @@ class ScheduledInhibition:
         self._who = who
         self._why = why
         self._schedule_lock = Lock()
+        self._inhibit_until: datetime = datetime.now()
         # optionals only None when closed
-        self._inhibit_until: Optional[datetime] = None
         self._sleep_inhibitor: Optional[SleepInhibitor] = None
         self._timer: Optional[Timer] = None
 
@@ -93,7 +95,7 @@ class ScheduledInhibition:
         if self._sleep_inhibitor is not None:
             self._sleep_inhibitor.__exit__(None, None, None)
         with self._schedule_lock:
-            self._inhibit_until = None
+            self._inhibit_until = min(self._inhibit_until, datetime.now())
             self._timer = None
             self._sleep_inhibitor = None
 

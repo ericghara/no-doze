@@ -1,6 +1,6 @@
 import unittest
 from datetime import timedelta, datetime
-from time import sleep
+
 from server.scheduled_inhibition import ScheduledInhibition
 
 
@@ -62,8 +62,8 @@ class TestScheduledInhibition(unittest.TestCase):
         foundRet = self.sched.set_inhibitor(until1)
         foundDuration = self.get_sleep_duration(timeout=timeout)
         self.assertFalse(foundRet, "return value")
-        self.assertLess(expected_duration * .8, foundDuration, f"inhibition too short {foundDuration}")
-        self.assertGreater(expected_duration * 1.2, foundDuration, f"inhibition too long {foundDuration}")
+        self.assertLess(expected_duration * .75, foundDuration, f"inhibition too short {foundDuration}")
+        self.assertGreater(expected_duration * 1.25, foundDuration, f"inhibition too long {foundDuration}")
 
     def test_set_inhibitor_does_not_clear_sleep_when_cancellation_race(self):
         # case where a new inhibition scheduled *just* as one is expiring

@@ -1,5 +1,6 @@
 import logging
 import signal
+from collections import deque
 from typing import *
 
 import jeepney as jeep
@@ -43,10 +44,11 @@ class SleepWatcher:
         self._awake_fn = awake_callback
         self._run = False
 
-    def run(self):
+    def run(self, mock_signals: Optional[List[jeep.low_level.Message]]=None):
         """
         Begin watching for PrepareForSleep signals.  Execute callbacks upon receiving signal.  This call blocks
         indefinitely so should probably be run on another thread.
+        :param: mock_signals: used for testing, inject a sequence of PrepareForSleep messages
         :return:
         """
         if self._connection is None:
@@ -55,7 +57,8 @@ class SleepWatcher:
             self._log.warning("SleepWatcher running without any callbacks. Essentially does nothing.")
 
         self._run = True
-        with self._connection.filter(self._match_rule) as signals:
+        mq = deque() if not mock_signals else deque(mock_signals)
+        with self._connection.filter(self._match_rule, queue=mq) as signals:
             self._sleep_delay.inhibit_sleep()
             while self._run:
                 try:

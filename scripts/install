@@ -1,12 +1,12 @@
 #!/bin/python3
 
-import logging
-import os
-import shutil
-import subprocess
 import argparse
 import grp
+import logging
+import os
 import pwd
+import shutil
+import subprocess
 from typing import *
 
 PROJECT_NAME = "no-doze"
@@ -68,6 +68,8 @@ core = [
     File(source=f"{SRC_ROOT}/server/__init__.py", destination=f"{DAEMON_DIR}/server/__init__.py", mode=0o644),
     File(source=f"{SRC_ROOT}/server/scheduled_inhibition.py", destination=f"{DAEMON_DIR}/server/scheduled_inhibition.py", mode=0o644),
     File(source=f"{SRC_ROOT}/server/sleep_inhibitor.py", destination=f"{DAEMON_DIR}/server/sleep_inhibitor.py", mode=0o644),
+    File(source=f"{SRC_ROOT}/server/org_freedesktop_login1.py", destination=f"{DAEMON_DIR}/server/org_freedesktop_login1.py", mode=0o644),
+    File(source=f"{SRC_ROOT}/server/sleep_watcher.py", destination=f"{DAEMON_DIR}/server/sleep_watcher.py", mode=0o644),
     # systemd
     File(source=f"{SRC_ROOT}/scripts/no-dozed.service", destination="/etc/systemd/system/no-dozed.service",
          mode=0o644),
