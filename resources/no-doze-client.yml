@@ -7,9 +7,6 @@ general:
   # no-doze root directory
   # base_dir: "./"
 
-  # times we should try connecting once we find a server before giving up.
-  # max_reconnections: 3
-
   # Delay before retrying (generally waiting for a response from the server)
   # retry_delay_sec: 1
 

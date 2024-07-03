@@ -3,37 +3,75 @@
 import logging
 import os.path
 import subprocess
+from typing import *
 
-INSTALL_DIR = "/opt/no-doze"
-UNIT_FILE = "/etc/systemd/system/no-doze.service"
+INSTALL_DIR = "/usr/lib/no-doze"
+SYSTEM_UNIT_FILE = "/etc/systemd/system/no-dozed.service"
+USER_UNIT_FILE = "/etc/systemd/user/no-doze-client.service"
+SYSTEM_CONFIG_FILE = "/etc/no-doze/no-dozed.yml"
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("no-doze:uninstaller")
 
 def run_without_error(cmd: list[str], error_msg: str) -> str:
-    result = subprocess.run(cmd, text=True)
+    result = subprocess.run(cmd, capture_output=True)
     if result.returncode != 0:
         if result.stderr:
             log.warning(result.stderr)
         log.warning(error_msg)
         exit(1)
-    return result.stdout
-
-if os.getuid() != 0:
-    log.warning("Uninstall must run as root.")
-    exit(1)
+    return result.stdout.decode()
 
 
-if not os.path.exists(INSTALL_DIR):
-    log.info(f"The directory {INSTALL_DIR} does not exist. Exiting.")
-    exit(1)
+def ask_until_answered(question: str, accepted: List[str], ignore_case: bool = True) -> str:
+    if ignore_case:
+        accepted = [w.lower() for w in accepted]
+    last = None
+    while not last:
+        last = input(question).strip()
+        if ignore_case:
+            last = last.lower()
+        if last not in accepted:
+            print(f"Please select from: {accepted}.")
+            last = None
+    return last
 
-# Install dir
-run_without_error(cmd=["rm", "-r", INSTALL_DIR], error_msg=f"Unable to delete {INSTALL_DIR}")
-# systemd
-subprocess.run(["systemctl", "stop", "no-dozed.service"], text=True)
-run_without_error(cmd=["systemctl", "disable", "no-dozed.service"], error_msg=f"Unable to disable the NoDoze service.")
-run_without_error(cmd=["rm", UNIT_FILE], error_msg=f"Unable to delete the unit file {UNIT_FILE}")
-run_without_error(cmd=["systemctl", "daemon-reload"], error_msg="Unable to reload systemd daemons.")
+def stop_client_for_users():
+    res = run_without_error(["loginctl", "list-users", "--no-legend"], error_msg="Unable to query logged in users")
+    lines = res.split("\n")
+    for line in lines:
+        if not line:
+            continue
+        _uid, username, *_ = line.split()
+        if subprocess.run(["sudo", "-u", username, "bash", "-l", "systemctl", "--user", "status", "no_doze_client"]).returncode == 0:
+            log.info(f"Stopping running no-doze-client for {username}")
+            subprocess.run(["sudo", "-u", username, "systemctl", "--user", "stop", "no_doze_client"], text=True)
 
-log.info("Uninstall completed successfully.")
+
+
+if __name__ == '__main__':
+    if os.getuid() != 0:
+        log.warning("Uninstall must run as root.")
+        exit(1)
+    if not os.path.exists(INSTALL_DIR):
+        log.info(f"The directory {INSTALL_DIR} does not exist. Exiting.")
+        exit(1)
+
+    if 'n' == ask_until_answered(question="Uninstall no-doze? (y/n) ", accepted=["y", "n"], ignore_case=True):
+        exit(0)
+
+    # systemd
+    run_without_error(["systemctl", "--global", "disable", "no-doze-client.service"], error_msg="Unable to disable NoDoze Clients")
+    run_without_error(cmd=["systemctl", "disable", "--now", "no-dozed.service"], error_msg=f"Unable to disable the NoDoze service.")
+    stop_client_for_users()
+    run_without_error(cmd=["rm", SYSTEM_UNIT_FILE], error_msg=f"Unable to delete the unit file {SYSTEM_UNIT_FILE}")
+    run_without_error(cmd=["rm", USER_UNIT_FILE], error_msg=f"Unable to delete the unit file {USER_UNIT_FILE}")
+    run_without_error(cmd=["systemctl", "daemon-reload"], error_msg="Unable to reload systemd daemons.")
+
+    # Install dir
+    run_without_error(cmd=["rm", "-r", INSTALL_DIR], error_msg=f"Unable to delete {INSTALL_DIR}")
+    # daemon config
+    run_without_error(cmd=["rm", "-r", SYSTEM_CONFIG_FILE], error_msg=f"Unable to delete {SYSTEM_CONFIG_FILE}")
+
+    log.info("Uninstall completed successfully.")
+    log.info("Client configurations in user's '~/.config/no-doze/' have been preserved, and may be manually deleted.")

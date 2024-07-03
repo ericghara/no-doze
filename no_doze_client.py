@@ -10,7 +10,6 @@ import os.path as path
 import re
 import select
 import signal
-import time
 from datetime import datetime, timedelta
 from select import poll
 from typing import *
@@ -27,7 +26,6 @@ from common.priority_queue import PriorityQueue
 CLIENT_ROOT_KEY = "general"
 LOGGING_LEVEL_KEY = "logging_level"
 BASE_DIR_KEY = "base_dir"
-MAX_RECONNECTIONS_KEY = "max_reconnections"
 RETRY_DELAY_KEY = "retry_delay_sec"
 STARTUP_DELAY_KEY = "startup_delay_min"
 
@@ -54,7 +52,6 @@ class NoDozeClient:
     ABOUT_TO_SLEEP_SIGNAL = signal.SIGRTMIN + 0
 
     def __init__(self, base_dir: path=DEFAULT_BASE_DIR, startup_delay: timedelta=timedelta(),
-                 max_reconnections: int = DEFAULT_CONNECTION_ATTEMPTS,
                  retry_delay: timedelta=RETRY_DELAY):
         self._log = logging.getLogger(type(self).__name__)
         self._inhibiting_processes = list()
@@ -63,9 +60,7 @@ class NoDozeClient:
         self._startup_delay = startup_delay
         self._fifo_path: Optional[str] = None
         self._fifo: Optional[IO] = None
-        self._connection_attempt = 0
         self._inhibit_until = datetime.now()
-        self._max_reconnections = max_reconnections
         self._retry_delay = retry_delay
         self._sig_w_fd: Optional[int] = None
         self._sig_r_fd: Optional[int] = None
@@ -91,50 +86,42 @@ class NoDozeClient:
         # there *are* edge cases, but they should be quite rare as the daemon in all but extreme cases
         # clears deletes its fifo on shutdown and a new daemon clears stale fifos on startup
         matcher = re.compile(self.FIFO_PREFIX + r"(\d+)")
+        num_fifo = 0
         found_fifo = None
-        # add some max attempts? here too?
-        while not found_fifo:
-            num_fifo = 0
-            for maybe_fifo in glob.glob(root_dir=self._base_dir, pathname=f"{self.FIFO_PREFIX}*"):
-                if not matcher.match(maybe_fifo):
-                    self._log.debug(f"Skipping: {maybe_fifo}.  Doesn't match expected FIFO naming.")
-                else:
-                    num_fifo += 1
-                    found_fifo = maybe_fifo
-                    self._log.debug(f"Discovered FIFO {found_fifo}")
-            if num_fifo != 1:
-                found_fifo = None
-                self._log.info(f"Detected {num_fifo} connection candidates.  Waiting for one.")
-                self._log.info(f"Reattempting in {self._retry_delay}")
-                time.sleep(self._retry_delay.total_seconds())
+        for maybe_fifo in glob.glob(root_dir=self._base_dir, pathname=f"{self.FIFO_PREFIX}*"):
+            if not matcher.match(maybe_fifo):
+                self._log.debug(f"Skipping: {maybe_fifo}.  Doesn't match expected FIFO naming.")
+            else:
+                num_fifo += 1
+                found_fifo = maybe_fifo
+                self._log.debug(f"Discovered FIFO {found_fifo}")
 
+        if num_fifo != 1:
+            self._log.info(f"Detected {num_fifo} connection candidates.  Waiting for one.")
+            return None
         self._log.debug(f"Candidate for FIFO connection identified: {found_fifo}")
         return path.join(self._base_dir, found_fifo)
 
-    def open_fifo(self):
-        self._fifo = None
-        while self._fifo is None:
-            self._connection_attempt += 1
-            if self._connection_attempt > self._max_reconnections:
-                self._log.warning("Max connection attempts exceeded.")
-                self.stop()
-                exit(-1)
-
-            if self._connection_attempt != 1:
-                self._log.info(f"Waiting {self._retry_delay} before reconnecting.")
-                time.sleep(self._retry_delay.total_seconds())
-
-            fifo_path = self._identify_fifo()
-            try:
-                self._fifo = open(fifo_path, mode="w+b", buffering=0)
-                self._fifo_path = fifo_path
-            except Exception as e:
-                self._log.warning(f"Unable to open fifo: {fifo_path}", exc_info=e)
-                self._fifo = None
-
-        self.send_message(BindMessage(pid=os.getpid(), uid=os.getuid(), attempt=self._connection_attempt))
+    def open_fifo(self) -> bool:
+        fifo_path = self._identify_fifo()
+        if fifo_path is None:
+            return False
+        try:
+            self._fifo = open(fifo_path, mode="w+b", buffering=0)
+            self._fifo_path = fifo_path
+        except Exception as e:
+            self._log.warning(f"Unable to open fifo: {fifo_path}", exc_info=e)
+            self._fifo = None
+        if self._fifo:
+            self.send_message(BindMessage(pid=os.getpid(), uid=os.getuid()))
+            return True
+        return False
 
     def close_fifo(self) -> None:
+        """
+        Safe to call weather or not fifo is open
+        :return:
+        """
         if self._fifo is None:
             return
         self._log.info(f"Closing FIFO: {self._fifo_path}")
@@ -226,36 +213,41 @@ class NoDozeClient:
         if not self._inhibiting_processes:
             raise ValueError("Cannot start without any inhibiting conditions.  Check your configuration.")
         while self._run:
-            if self._fifo is None:
-                self.open_fifo()
-                # give client a chance to reply to bind message (via a signal)
-                time.sleep(self._retry_delay.total_seconds())
-                continue
-            # negative timeout blocks forever
-            next_check_ms = round(self._calc_sec_until(self._schedule.peek().time)*1_000)
-            events = self._poll.poll(next_check_ms)
-            if not events:
-                # regular expiry check schedule for event
-                if self._handle_scheduled_checks():
-                    self.send_message(InhibitMessage(pid=os.getpid(), uid=os.getuid(),
-                                                     expiry_timestamp=self._inhibit_until))
+
+            if self._fifo is None and not self.open_fifo():
+                # no fifo don't poll at normal interval
+                next_check_ms = round(self._calc_sec_until(datetime.now() + self.RETRY_DELAY) * 1000)
             else:
+                next_check_ms = round(self._calc_sec_until(self._schedule.peek().time) * 1_000)
+
+            events = self._poll.poll(next_check_ms)
+            if events:
                 # some interrupt
                 for fd, _ in events:
                     if fd != self._sig_r_fd:
                         raise RuntimeError(f"Unknown file descriptor: {fd}")
                     sig = self._read_signal(fd)
-                    if sig == self.ABOUT_TO_SLEEP_SIGNAL:
+                    if sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+                        self._log.info(f"Caught signal: {sig}. Starting Shutdown.")
+                        self._run = False
+                        break
+                    elif self._fifo is None:
+                        # without connection, we can't really do anything with other signals, so just drop
+                        continue
+                    elif sig == self.ABOUT_TO_SLEEP_SIGNAL:
                         if self._handle_unscheduled_checks():
                             self.send_message(InhibitMessage(pid=os.getpid(), uid=os.getuid(),
                                                              expiry_timestamp=self._inhibit_until))
                     elif sig == self.UNBIND_SIGNAL:
                         self.close_fifo(),
-                    elif sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
-                        self._log.info(f"Caught signal: {sig}. Starting Shutdown.")
-                        self._run = False
                     else:
                         self._log.info(f"Caught unrecognized signal: {sig}. Ignoring.")
+
+            if self._run and self._fifo is not None and datetime.now() >= self._schedule.peek().time:
+                if self._handle_scheduled_checks():
+                    self.send_message(InhibitMessage(pid=os.getpid(), uid=os.getuid(),
+                                                     expiry_timestamp=self._inhibit_until))
+
 
 
     def stop(self):
@@ -296,9 +288,6 @@ class NoDozeClient:
 
 def main() -> None:
     base_dir = config_provider.get_value([CLIENT_ROOT_KEY, BASE_DIR_KEY], "./")
-    max_reconnections = config_provider.get_value([CLIENT_ROOT_KEY, MAX_RECONNECTIONS_KEY],
-                                                     cast_fn=CastFn.to_int,
-                                                     default=NoDozeClient.DEFAULT_CONNECTION_ATTEMPTS)
     retry_delay = config_provider.get_value([CLIENT_ROOT_KEY, RETRY_DELAY_KEY],
                                                cast_fn=CastFn.to_timedelta_sec,
                                                default=NoDozeClient.RETRY_DELAY)
@@ -306,7 +295,7 @@ def main() -> None:
                                                  cast_fn=CastFn.to_timedelta_min,
                                                  default=NoDozeClient.DEFAULT_STARTUP_DELAY)
     registrar.scan()
-    with NoDozeClient(base_dir=base_dir, max_reconnections=max_reconnections, retry_delay=retry_delay,
+    with NoDozeClient(base_dir=base_dir, retry_delay=retry_delay,
                       startup_delay=startup_delay) as client:
         for inhibiting_process in registrar:
             client.add_inhibitor(inhibiting_process)

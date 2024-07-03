@@ -6,8 +6,8 @@ from typing import NamedTuple, Optional
 
 from qbittorrentapi import Client
 
-from common import config_provider
 from client.inhibiting_condition import InhibitingCondition
+from common import config_provider
 
 logging_level_key = "logging_level"
 config_root_path = ("plugins", "qbittorrent")
@@ -116,7 +116,8 @@ class QbittorrentInhibitor(InhibitingCondition):
         if seconds_elapsed > (1.5 * self.period().total_seconds()):
             self._log.debug(
                 "Excessive time passed between periods.  If system did not just wake up from sleep this indicates a problem.")
-            # we need more data, inhibit sleep.
+            # An enhancement would be falling back onto the instantaneous speeds here.  But small benefit
+            # because we are just waiting a single period.
             return True
         if byte_delta < 0:
             self._log.debug(

@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import os.path as path
+import signal
 import tempfile
 import time
 import unittest
@@ -20,8 +21,10 @@ class MockInhibitor(InhibitingCondition):
     def __init__(self, period: timedelta=timedelta(milliseconds=10), inhibit: bool=False):
         super().__init__(name=type(self).__name__, period=period)
         self.inhibit = inhibit
+        self.num_calls = 0
 
     def does_inhibit(self) -> bool:
+        self.num_calls += 1
         return self.inhibit
 
 class TestNoDozeClient(unittest.TestCase):
@@ -34,8 +37,7 @@ class TestNoDozeClient(unittest.TestCase):
         self.dir = tempfile.TemporaryDirectory(prefix="no_doze_test_")
         self.dir_name = self.dir.name
         self.inhibitor = MockInhibitor()
-        self.client = NoDozeClient(base_dir=self.dir_name, max_reconnections=self.MAX_RECONNECTIONS,
-                                   retry_delay=self.REATTEMPT_DELAY)
+        self.client = NoDozeClient(base_dir=self.dir_name, retry_delay=self.REATTEMPT_DELAY)
         self.client.add_inhibitor(self.inhibitor)
         self.client.__enter__()
         self.pool = ThreadPoolExecutor(2)
@@ -68,22 +70,46 @@ class TestNoDozeClient(unittest.TestCase):
         return None
 
 
-    def test_open_fifo_spins_when_no_fifo(self):
-        f = self.pool.submit(self.client.open_fifo)
+    def send_signal_to_client(self, sig: int) -> None:
+        if sig < 0 or sig > 255:
+            raise ValueError("out of range")
+        os.write(self.client._sig_w_fd, chr(sig).encode('ascii'))
+
+    def test_client_responds_to_shutdown_signals_when_no_fifo(self):
+        f = self.pool.submit(self.client.run)
+        self.send_signal_to_client(signal.SIGTERM)
         time.sleep(0.050)
-        self.assertFalse(f.done())
-        # Just allow thread to join
-        self.makeFifo(1)
+        self.assertTrue(f.done())
         f.result()
 
-    def test_open_fifo_spins_when_two_fifos(self):
-        extra_fifo = self.makeFifo(1)
-        self.makeFifo(2)
-        f = self.pool.submit(self.client.open_fifo)
+    def test_client_responds_to_shutdown_signals_when_fifo(self):
+        f = self.pool.submit(self.client.run)
+        fifo = self.makeFifo(1)
+        self.assertIsNotNone(self.readFifo(fifo))
+        self.send_signal_to_client(signal.SIGTERM)
         time.sleep(0.050)
-        self.assertFalse(f.done())
-        # allow thread to join
-        os.unlink(extra_fifo)
+        self.assertTrue(f.done())
+        f.result()
+
+    def test_client_does_not_check_inhibiting_conditions_when_no_fifo(self):
+        f = self.pool.submit(self.client.run)
+        time.sleep(0.050)
+        self.send_signal_to_client(signal.SIGTERM)
+        time.sleep(0.050)
+        self.assertTrue(f.done())
+        self.assertEqual(0, self.inhibitor.num_calls)
+        f.result()
+
+    def test_client_does_not_connect_when_two_fifos(self):
+        fifo0 = self.makeFifo(1)
+        fifo1 = self.makeFifo(2)
+        f = self.pool.submit(self.client.run)
+        time.sleep(0.050)
+        self.assertIsNone(self.readFifo(fifo0, timeout=timedelta(milliseconds=10)))
+        self.assertIsNone(self.readFifo(fifo1, timeout=timedelta(milliseconds=10)))
+        self.send_signal_to_client(signal.SIGTERM)
+        time.sleep(0.050)
+        self.assertTrue(f.done())
         f.result()
 
     def test_open_fifo_sends_bind_message(self):
@@ -111,14 +137,31 @@ class TestNoDozeClient(unittest.TestCase):
         self.client.stop()
         f.result()
 
-    def test_close_fifo_causes_client_rebind(self):
+    def test_unbind_signal_causes_client_rebind(self):
         fifo = self.makeFifo(1)
         f = self.pool.submit(self.client.run)
-        for i in range(self.MAX_RECONNECTIONS):
+        for i in range(3):
             obj = json.loads(self.readFifo(fifo), cls=MessageDecoder)
             self.assertTrue(isinstance(obj, BindMessage))
-            self.client.close_fifo()
-        self.assertRaises(SystemExit, lambda: f.result(timeout=0.050))
+            self.send_signal_to_client(self.client.UNBIND_SIGNAL)
+        self.client.stop()
+        f.result()
+
+    def test_prepare_for_sleep_signal_causes_client_to_check_inhibitor(self):
+        fifo = self.makeFifo(1)
+        f = self.pool.submit(self.client.run)
+        start = datetime.now()
+        self.readFifo(fifo) # wait for bind
+        # just spam client with about to sleeps
+        for _ in range(10):
+            self.send_signal_to_client(self.client.ABOUT_TO_SLEEP_SIGNAL)
+        time.sleep((timedelta(milliseconds=50)-(datetime.now()-start)).total_seconds())
+        # assert we checked far more times than would be expected on normal schedule
+        self.assertGreater(self.inhibitor.num_calls, 10)
+        self.client.stop()
+        f.result()
+
+
 
     def test_client_calls_at_inhibitor_around_scheduled_time(self):
         self.inhibitor.inhibit = True

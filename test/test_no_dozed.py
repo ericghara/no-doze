@@ -63,7 +63,7 @@ class TestNoDozeD(unittest.TestCase):
         self.assertFalse(os.path.exists(self.server._fifo_path))
 
     def test__binds_when_unbound(self):
-        msg = BindMessage(pid=123, uid=567, attempt=0)
+        msg = BindMessage(pid=123, uid=567)
         self.server._handle_bind(msg)
         self.assertEqual({msg.pid}, self.server.bound_to())
 
@@ -71,7 +71,7 @@ class TestNoDozeD(unittest.TestCase):
         expected = {123, 321}
         for pid in expected:
             # currently same uid can bind multiple times
-            msg = BindMessage(pid=pid, uid=567, attempt=0)
+            msg = BindMessage(pid=pid, uid=567)
             self.server._handle_bind(msg)
         self.assertEqual(expected, self.server.bound_to())
 
@@ -81,14 +81,14 @@ class TestNoDozeD(unittest.TestCase):
         self.assertFalse(self.server.inhibited())
 
     def test__handle_inhibit_updates_expiry_in_future(self):
-        bind_message = BindMessage(pid=123, uid=567, attempt=0)
+        bind_message = BindMessage(pid=123, uid=567)
         self.server._handle_bind(bind_message)
         inhibit_msg = InhibitMessage(pid=123, uid=567, expiry_timestamp=datetime.now() + timedelta(seconds=100))
         self.server._handle_inhibit(inhibit_msg)
         self.assertTrue(self.server.inhibited())
 
     def test__handle_inhibit_does_not_update_expiry_in_past(self):
-        bind_message = BindMessage(pid=123, uid=567, attempt=0)
+        bind_message = BindMessage(pid=123, uid=567)
         self.server._handle_bind(bind_message)
         inhibit_msg = InhibitMessage(pid=123, uid=567, expiry_timestamp=datetime.now() + timedelta(seconds=100))
         self.server._handle_inhibit(inhibit_msg)
@@ -97,7 +97,7 @@ class TestNoDozeD(unittest.TestCase):
         self.assertTrue(self.server.inhibited())
 
     def test__handle_inhibit_updates_on_further_in_future_expiry(self):
-        bind_message = BindMessage(pid=123, uid=567, attempt=0)
+        bind_message = BindMessage(pid=123, uid=567)
         self.server._handle_bind(bind_message)
         inhibit_msg = InhibitMessage(pid=123, uid=567, expiry_timestamp=datetime.now() + timedelta(milliseconds=50))
         self.server._handle_inhibit(inhibit_msg)

@@ -4,6 +4,8 @@ from typing import Any
 from typing import Dict
 
 import common.message.messages as messages
+
+
 class MessageEncoder(json.JSONEncoder):
 
     def default(self, obj):
@@ -26,7 +28,7 @@ class MessageDecoder(json.JSONDecoder):
             o = None
             match t:
                 case messages.BindMessage.__name__:
-                    o = messages.BindMessage(pid=d["pid"], uid=d["uid"], attempt=d["attempt"])
+                    o = messages.BindMessage(pid=d["pid"], uid=d["uid"])
                 case messages.InhibitMessage.__name__:
                     o = messages.InhibitMessage(pid=d["pid"], uid=d["uid"],
                                                 expiry_timestamp=datetime.fromtimestamp(d["expiry_timestamp"]))

@@ -26,10 +26,9 @@ class InhibitMessage:
 
 class BindMessage:
 
-    def __init__(self, pid: int, uid:int, attempt: int):
+    def __init__(self, pid: int, uid:int):
         self.pid : int = pid
         self.uid : int = uid
-        self.attempt : int = attempt
         self.type : str = type(self).__name__
         self.version : int = API_VERSION
 
