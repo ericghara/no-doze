@@ -114,6 +114,7 @@ class NoDozeClient:
             self._fifo = None
         if self._fifo:
             self.send_message(BindMessage(pid=os.getpid(), uid=os.getuid()))
+            self._log.info("Client connected to daemon.")
             return True
         return False
 
