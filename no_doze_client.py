@@ -228,7 +228,7 @@ class NoDozeClient:
                     if fd != self._sig_r_fd:
                         raise RuntimeError(f"Unknown file descriptor: {fd}")
                     sig = self._read_signal(fd)
-                    if sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+                    if sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP, signal.SIGQUIT):
                         self._log.info(f"Caught signal: {sig}. Starting Shutdown.")
                         self._run = False
                         break
@@ -256,7 +256,14 @@ class NoDozeClient:
         This will eventually cause run to exit, the next time it wakes up from sleep.  Intended to be thread safe.
         :return:
         """
-        self._run = False
+        if not self.run:
+            return
+        try:
+            os.write(self._sig_w_fd, chr(signal.SIGHUP).encode('ascii'))
+            self._log.info('Sending stop signal.')
+        except Exception as e:
+            self._log.warning('Unable to send stop signal.', exc_info=e)
+            self._run = False
 
 
     def __enter__(self) -> 'NoDozeClient':
@@ -266,7 +273,7 @@ class NoDozeClient:
         self._poll = poll()
         self._poll.register(self._sig_r_fd, select.POLLIN)
         signal.set_wakeup_fd(self._sig_w_fd)
-        for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT, signal.SIGALRM,
+        for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT,
                     self.ABOUT_TO_SLEEP_SIGNAL, self.UNBIND_SIGNAL):
             # need to handle signals for wakeup_fd redirection to actually work
             signal.signal(signalnum=sig,
@@ -284,6 +291,7 @@ class NoDozeClient:
         finally:
             self._sig_w_fd = None
             self._signal_r_fd = None
+
         self._poll = None
 
 

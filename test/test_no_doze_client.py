@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import os.path as path
-import signal
 import tempfile
 import time
 import unittest
@@ -77,7 +76,7 @@ class TestNoDozeClient(unittest.TestCase):
 
     def test_client_responds_to_shutdown_signals_when_no_fifo(self):
         f = self.pool.submit(self.client.run)
-        self.send_signal_to_client(signal.SIGTERM)
+        self.client.stop()
         time.sleep(0.050)
         self.assertTrue(f.done())
         f.result()
@@ -86,7 +85,7 @@ class TestNoDozeClient(unittest.TestCase):
         f = self.pool.submit(self.client.run)
         fifo = self.makeFifo(1)
         self.assertIsNotNone(self.readFifo(fifo))
-        self.send_signal_to_client(signal.SIGTERM)
+        self.client.stop()
         time.sleep(0.050)
         self.assertTrue(f.done())
         f.result()
@@ -94,7 +93,7 @@ class TestNoDozeClient(unittest.TestCase):
     def test_client_does_not_check_inhibiting_conditions_when_no_fifo(self):
         f = self.pool.submit(self.client.run)
         time.sleep(0.050)
-        self.send_signal_to_client(signal.SIGTERM)
+        self.client.stop()
         time.sleep(0.050)
         self.assertTrue(f.done())
         self.assertEqual(0, self.inhibitor.num_calls)
@@ -107,7 +106,7 @@ class TestNoDozeClient(unittest.TestCase):
         time.sleep(0.050)
         self.assertIsNone(self.readFifo(fifo0, timeout=timedelta(milliseconds=10)))
         self.assertIsNone(self.readFifo(fifo1, timeout=timedelta(milliseconds=10)))
-        self.send_signal_to_client(signal.SIGTERM)
+        self.client.stop()
         time.sleep(0.050)
         self.assertTrue(f.done())
         f.result()
@@ -207,10 +206,6 @@ class TestNoDozeClient(unittest.TestCase):
         self.assertIsNone(self.readFifo(fifo, timedelta(milliseconds=20)))
         self.client.stop()
         f.result(timeout=0.100)
-
-
-
-
 
 
 if __name__ == '__main__':
