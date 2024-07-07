@@ -3,37 +3,94 @@
 import logging
 import os.path
 import subprocess
+from typing import *
 
-INSTALL_DIR = "/opt/no-doze"
-UNIT_FILE = "/etc/systemd/system/no-doze.service"
+INSTALL_DIR = "/usr/lib/no-doze"
+SYSTEM_UNIT_FILE = "/etc/systemd/system/no-dozed.service"
+USER_UNIT_FILE = "/etc/systemd/user/no-doze-client.service"
+SYSTEM_CONFIG_FILE = "/etc/no-doze/no-dozed.yml"
+CLIENT_SERVICE_NAME = "no-doze-client.service"
+DAEMON_SERVICE_NAME = "no-dozed.service"
+GROUP_NAME = "no-doze"
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("no-doze:uninstaller")
 
-def run_without_error(cmd: list[str], error_msg: str) -> str:
-    result = subprocess.run(cmd, text=True)
+def exec(cmd: list[str], error_msg: str, exit_on_err: bool=True) -> Tuple[int, str]:
+    result = subprocess.run(cmd, capture_output=True)
     if result.returncode != 0:
         if result.stderr:
             log.warning(result.stderr)
         log.warning(error_msg)
+        if exit_on_err:
+            exit(1)
+    return result.returncode, result.stdout.decode()
+
+
+def ask_until_answered(question: str, accepted: List[str], ignore_case: bool = True) -> str:
+    if ignore_case:
+        accepted = [w.lower() for w in accepted]
+    last = None
+    while not last:
+        last = input(question).strip()
+        if ignore_case:
+            last = last.lower()
+        if last not in accepted:
+            print(f"Please select from: {accepted}.")
+            last = None
+    return last
+
+
+def stop_client_for_users():
+    status, res = exec(["loginctl", "list-users", "--no-legend"], error_msg="Unable to query logged in users",
+                  exit_on_err=False)
+    lines = res.split("\n")
+    for line in lines:
+        if not line:
+            continue
+        _uid, username, *_ = line.split()
+        # systemd-run is the easiest way to ensure proper systemd specific env-variables (specifically related to dbus)
+        if subprocess.run(["systemd-run", "--quiet", "--pipe", "--wait", "--user", "--machine", f"{username}@.host",
+                           "/usr/bin/systemctl", "--user", "--quiet", "is-active", CLIENT_SERVICE_NAME]).returncode == 0:
+            log.info(f"Stopping running no-doze-client for {username}")
+            subprocess.run(["systemd-run", "--quiet", "--pipe", "--wait", "--user", "--machine", f"{username}@.host",
+                            "/usr/bin/systemctl", "--user", "stop", CLIENT_SERVICE_NAME], text=True)
+            subprocess.run(["systemd-run", "--quiet", "--pipe", "--wait", "--user", "--machine", f"{username}@.host",
+                            "/usr/bin/systemctl", "--user", "disable", CLIENT_SERVICE_NAME], text=True)
+
+
+if __name__ == '__main__':
+    if os.getuid() != 0:
+        log.warning("Uninstall must run as root.")
         exit(1)
-    return result.stdout
+    if not os.path.exists(INSTALL_DIR):
+        log.info(f"The directory {INSTALL_DIR} does not exist. Exiting.")
+        exit(1)
 
-if os.getuid() != 0:
-    log.warning("Uninstall must run as root.")
-    exit(1)
+    if 'n' == ask_until_answered(question="Uninstall no-doze? (y/n) ", accepted=["y", "n"], ignore_case=True):
+        exit(0)
 
+    # systemd
+    exec(["systemctl", "--global", "disable", CLIENT_SERVICE_NAME], error_msg="Unable to disable NoDoze Clients",
+         exit_on_err=False)
+    exec(cmd=["systemctl", "disable", "--now", DAEMON_SERVICE_NAME], error_msg=f"Unable to disable the NoDoze service.",
+         exit_on_err=False)
+    stop_client_for_users()
+    exec(cmd=["rm", SYSTEM_UNIT_FILE], error_msg=f"Unable to delete the unit file {SYSTEM_UNIT_FILE}",
+         exit_on_err=False)
+    exec(cmd=["rm", USER_UNIT_FILE], error_msg=f"Unable to delete the unit file {USER_UNIT_FILE}",
+         exit_on_err=False)
+    exec(cmd=["systemctl", "daemon-reload"], error_msg="Unable to reload systemd daemons.",
+         exit_on_err=False)
 
-if not os.path.exists(INSTALL_DIR):
-    log.info(f"The directory {INSTALL_DIR} does not exist. Exiting.")
-    exit(1)
-
-# Install dir
-run_without_error(cmd=["rm", "-r", INSTALL_DIR], error_msg=f"Unable to delete {INSTALL_DIR}")
-# systemd
-subprocess.run(["systemctl", "stop", "no-doze.service"], text=True)
-run_without_error(cmd=["systemctl", "disable", "no-doze.service"], error_msg=f"Unable to disable the NoDoze service.")
-run_without_error(cmd=["rm", UNIT_FILE], error_msg=f"Unable to delete the unit file {UNIT_FILE}")
-run_without_error(cmd=["systemctl", "daemon-reload"], error_msg="Unable to reload systemd daemons.")
-
-log.info("Uninstall completed successfully.")
+    # Install dir
+    exec(cmd=["rm", "-r", INSTALL_DIR], error_msg=f"Unable to delete {INSTALL_DIR}",
+         exit_on_err=False)
+    # daemon config
+    exec(cmd=["rm", "-r", SYSTEM_CONFIG_FILE], error_msg=f"Unable to delete {SYSTEM_CONFIG_FILE}",
+         exit_on_err=False)
+    # group
+    exec(cmd=["groupdel", GROUP_NAME], error_msg=f"Unable to remove group {GROUP_NAME}.", exit_on_err=False)
+    
+    log.info("Uninstall completed successfully.")
+    log.info("Client configurations in user's '~/.config/no-doze/' have been preserved, and may be manually deleted.")

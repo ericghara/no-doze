@@ -1,5 +1,6 @@
 misc
 .idea
 *.pyc
-resources/your_config.yml
+.run
+resources/your_*.yml
 dist

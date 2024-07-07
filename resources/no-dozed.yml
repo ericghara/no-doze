@@ -1,0 +1,3 @@
+logging_level: "INFO"
+base_dir: "./"
+fifo_permissions: "660"

@@ -1,22 +1,22 @@
 [tool.poetry]
 name = "no-doze"
-version = "0.1.0"
-description = "\"Delays a Linux computer form sleeping while certain processes are occurring, such as streaming a video to a client\""
+version = "0.2.0-rc1"
+description = "Delays a Linux computer from sleeping while certain processes are occurring, such as streaming a video to a client"
 authors = ["Eric Gha <eric@ericgha.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "core" }, {include = "plugin"}, {include = "test"} ]
-include = ["no_doze.py", "resources/config.yml", "scripts/", "LICENSE", "README.md"]
+include = ["no_dozed.py", "no_doze_client.py", "resources/client_config.yml", "resources/daemon_config.yml", "scripts/",
+    ]
 
 [tool.poetry.dependencies]
 python = "^3.11"
 PyYAML = "^6.0"
 PlexAPI = "^4.13.4"
 qbittorrent-api = "^2023.4.47"
-dbus-python = "^1.3.2"
+jeepney = "^0.8.0"
 
-[tool.poetry.group.extras.dependencies]
-coverage = "^7.2.5"
+[tool.poetry.extras]
+testing = ["coverage"]
 
 [build-system]
 requires = ["poetry-core"]

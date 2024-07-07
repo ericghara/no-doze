@@ -4,7 +4,7 @@ import pkgutil
 from typing import Iterable
 
 import plugin
-from core.inhibiting_condition import InhibitingCondition
+from client.inhibiting_condition import InhibitingCondition
 
 
 class InhibitingConditionRegistrar:

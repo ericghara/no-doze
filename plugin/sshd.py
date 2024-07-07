@@ -1,13 +1,12 @@
 import logging
 import subprocess
 import re
-import datetime
-from datetime import datetime, timedelta
+from datetime import timedelta
 
-from core import config_provider
-from core.inhibiting_condition import InhibitingCondition
+from common import config_provider
+from client.inhibiting_condition import InhibitingCondition
 
-config_root_key = "sshd"
+config_root_path = ("plugins", "sshd")
 period_key = "period_min"
 # max inhibiting periods (i.e. inactive user)
 #
@@ -46,13 +45,13 @@ class SshdInhibitor(InhibitingCondition):
         return 0 < self._periods_inhibited <= self._max_periods
 
 def register(registrar: 'InhibtingConditionRegistrar') -> None:
-    if not config_provider.key_exists([config_root_key]):
+    if not config_provider.key_exists([*config_root_path]):
         logging.debug("Skipping registration of sshd inhibitor. Configuration is absent.")
         return
 
-    period_min_str = config_provider.get_value(key_path=[config_root_key, period_key], default_val="5")
-    max_periods_str = config_provider.get_value(key_path=[config_root_key, max_periods_key],
-                                                default_val="2147483647")
+    period_min_str = config_provider.get_value(key_path=[*config_root_path, period_key], default="5")
+    max_periods_str = config_provider.get_value(key_path=[*config_root_path, max_periods_key],
+                                                default="2147483647")
     try:
         period_min = float(period_min_str)
     except Exception:
