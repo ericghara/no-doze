@@ -16,12 +16,12 @@ def load_file(path: [str|Path]) -> None:
     global _config_yml, _config_path
     _config_path = path
     with _config_path.open() as f:
-        _config_yml = yaml.load(f, Loader=yaml.CLoader)
+        _config_yml = yaml.load(f, Loader=yaml.Loader)
 
 
 def _load_string(yml_str: str) -> None:
     global _config_yml
-    _config_yml = yaml.load(yml_str, Loader=yaml.CLoader)
+    _config_yml = yaml.load(yml_str, Loader=yaml.Loader)
 
 
 def get_value(key_path: list[str], default: Optional[Any] = None, cast_fn: Callable[[str], Any]=str) -> Any:
